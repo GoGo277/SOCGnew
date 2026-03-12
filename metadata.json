@@ -1,0 +1,5 @@
+{
+  "name": "SOC Asset Guardian",
+  "description": "A high-performance security asset management platform designed for SOC analysts, featuring real-time tracking, CRUD operations, and advanced JSON data mobility.",
+  "requestFramePermissions": []
+}
