@@ -1,62 +1,78 @@
+
 import { Message, ChatRoom, User } from '../types';
 
-const ROOMS_KEY = 'chat_rooms';
-const MESSAGES_KEY = 'chat_messages';
+const MESSAGES_KEY = 'soc_chat_messages';
+const ROOMS_KEY = 'soc_chat_rooms';
 
-const getStoredRooms = (): any[] => {
-  const data = localStorage.getItem(ROOMS_KEY);
-  return data ? JSON.parse(data) : [];
-};
-
-const setStoredRooms = (data: any[]) => {
-  localStorage.setItem(ROOMS_KEY, JSON.stringify(data));
-};
-
-const getStoredMessages = (): any[] => {
-  const data = localStorage.getItem(MESSAGES_KEY);
-  return data ? JSON.parse(data) : [];
-};
-
-const setStoredMessages = (data: any[]) => {
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(data));
-};
+const DEFAULT_ROOMS: ChatRoom[] = [
+  {
+    id: 'room-general',
+    name: 'General SOC Channel',
+    type: 'general',
+    participants: [],
+    lastMessage: 'Channel opened.',
+    createdAt: new Date().toISOString()
+  }
+];
 
 export const chatService = {
-  getRooms: async (): Promise<ChatRoom[]> => {
-    const rooms = getStoredRooms();
-    return rooms.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  getRooms: (): ChatRoom[] => {
+    const data = localStorage.getItem(ROOMS_KEY);
+    return data ? JSON.parse(data) : DEFAULT_ROOMS;
   },
-  getMessages: async (roomId: string): Promise<Message[]> => {
-    const messages = getStoredMessages();
-    return messages.filter(m => m.roomId === roomId).sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  },
-  sendMessage: async (roomId: string, message: Omit<Message, 'id' | 'timestamp'>): Promise<Message | null> => {
-    const messages = getStoredMessages();
-    const now = new Date().toISOString();
-    const newMessage = { ...message, roomId, id: crypto.randomUUID(), timestamp: now };
-    messages.push(newMessage);
-    setStoredMessages(messages);
 
-    const rooms = getStoredRooms();
-    const roomIndex = rooms.findIndex(r => r.id === roomId);
-    if (roomIndex !== -1) {
-      rooms[roomIndex].lastMessage = message.content.substring(0, 50);
-      setStoredRooms(rooms);
+  getMessages: (roomId: string): Message[] => {
+    const data = localStorage.getItem(MESSAGES_KEY);
+    const allMessages: Record<string, Message[]> = data ? JSON.parse(data) : {};
+    return allMessages[roomId] || [];
+  },
+
+  sendMessage: (roomId: string, message: Omit<Message, 'id' | 'timestamp'>): Message => {
+    const data = localStorage.getItem(MESSAGES_KEY);
+    const allMessages: Record<string, Message[]> = data ? JSON.parse(data) : {};
+    
+    const newMessage: Message = {
+      ...message,
+      id: crypto.randomUUID(),
+      timestamp: new Date().toISOString()
+    };
+
+    if (!allMessages[roomId]) allMessages[roomId] = [];
+    allMessages[roomId].push(newMessage);
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(allMessages));
+
+    const rooms = chatService.getRooms();
+    const roomIdx = rooms.findIndex(r => r.id === roomId);
+    if (roomIdx !== -1) {
+      rooms[roomIdx].lastMessage = newMessage.content.substring(0, 50);
+      localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
     }
 
-    return newMessage as Message;
+    return newMessage;
   },
-  createRoom: async (name: string, type: ChatRoom['type'], participants: string[]): Promise<ChatRoom | null> => {
-    const rooms = getStoredRooms();
+
+  createRoom: (name: string, type: ChatRoom['type'], participants: string[]): ChatRoom => {
+    const rooms = chatService.getRooms();
+    
+    // For direct messages, check if room already exists
     if (type === 'direct' && participants.length === 2) {
-      const existing = rooms.find(r => r.type === 'direct' && r.participants.includes(participants[0]) && r.participants.includes(participants[1]));
+      const existing = rooms.find(r => 
+        r.type === 'direct' && 
+        r.participants.includes(participants[0]) && 
+        r.participants.includes(participants[1])
+      );
       if (existing) return existing;
     }
 
-    const now = new Date().toISOString();
-    const newRoom = { id: crypto.randomUUID(), name, type, participants, createdAt: now };
+    const newRoom: ChatRoom = {
+      id: `room-${crypto.randomUUID()}`,
+      name,
+      type,
+      participants,
+      createdAt: new Date().toISOString()
+    };
     rooms.push(newRoom);
-    setStoredRooms(rooms);
-    return newRoom as ChatRoom;
+    localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
+    return newRoom;
   }
 };

@@ -38,8 +38,8 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
     }
   };
 
-  const handleRead = async (id: string) => {
-    await requestService.markAsRead(id);
+  const handleRead = (id: string) => {
+    requestService.markAsRead(id);
     onUpdate();
   };
 
@@ -63,7 +63,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         <div className="flex items-center gap-4">
           {unreadCount > 0 && (
             <button 
-              onClick={async () => { await requestService.markAllAsRead(currentUser.id); onUpdate(); }}
+              onClick={() => { requestService.markAllAsRead(currentUser.id); onUpdate(); }}
               className="text-[9px] font-black text-zinc-500 hover:text-white uppercase tracking-widest px-2 py-1 hover:bg-white/5 rounded-md transition-all"
             >
               {t('clear_buffer')}

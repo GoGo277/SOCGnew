@@ -1,42 +1,75 @@
-import { Guideline } from '../types';
 
-const STORAGE_KEY = 'guidelines';
+import { Guideline, UserRole } from '../types';
 
-const getStoredGuidelines = (): any[] => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
-};
+const STORAGE_KEY = 'soc_guidelines_data';
 
-const setStoredGuidelines = (data: any[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-};
+const DEFAULT_GUIDELINES: Guideline[] = [
+  {
+    id: 'g1',
+    title: 'Asset Onboarding Standard',
+    content: '# Asset Onboarding Standard\n\nAll new hardware must follow this protocol before being added to the production network.\n\n### 1. Pre-Check\n- Verify Serial Number\n- Perform Vulnerability Scan\n- Assign Static IPv4\n\n### 2. Documentation\nInclude detailed notes about the intended use case.\n\n![SOC Shield](https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&q=80&w=400)',
+    visibleTo: ['Admin', 'L2', 'L1'],
+    author: 'System',
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'g2',
+    title: 'Incident Response Tier 2',
+    content: '# Tier 2 Escalation\n\nWhen a "Critical" incident is identified, follow these steps.\n\n1. Isolate Affected Node\n2. Notify On-Call Lead\n3. Capture Network Traffic PCAP\n\n> Warning: Do not reboot the machine as it may clear volatile forensic evidence.',
+    visibleTo: ['Admin', 'L2'],
+    author: 'System',
+    updatedAt: new Date().toISOString()
+  }
+];
 
 export const guidelineService = {
-  getGuidelines: async (): Promise<Guideline[]> => {
-    const guidelines = getStoredGuidelines();
-    return guidelines.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+  getGuidelines: (role?: UserRole): Guideline[] => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    const all: Guideline[] = data ? JSON.parse(data) : DEFAULT_GUIDELINES;
+    if (role && role !== 'Admin') {
+      return all.filter(g => g.visibleTo.includes(role));
+    }
+    return all;
   },
-  saveGuideline: async (guideline: Omit<Guideline, 'id' | 'updatedAt'> & { id?: string }): Promise<Guideline | null> => {
-    const guidelines = getStoredGuidelines();
+
+  saveGuideline: (guideline: Omit<Guideline, 'id' | 'updatedAt'> & { id?: string }): Guideline => {
+    const all = guidelineService.getGuidelines();
     const now = new Date().toISOString();
+    let updatedOrNew: Guideline;
     
     if (guideline.id) {
-      const index = guidelines.findIndex(g => g.id === guideline.id);
-      if (index !== -1) {
-        guidelines[index] = { ...guidelines[index], ...guideline, updatedAt: now };
-        setStoredGuidelines(guidelines);
-        return guidelines[index];
+      const idx = all.findIndex(g => g.id === guideline.id);
+      if (idx !== -1) {
+        updatedOrNew = {
+          ...all[idx],
+          ...guideline,
+          updatedAt: now
+        } as Guideline;
+        all[idx] = updatedOrNew;
+      } else {
+        throw new Error('Guideline not found');
       }
-      return null;
+    } else {
+      updatedOrNew = {
+        ...guideline,
+        id: `guide-${crypto.randomUUID()}`,
+        updatedAt: now
+      } as Guideline;
+      all.push(updatedOrNew);
     }
 
-    const newGuideline = { ...guideline, id: crypto.randomUUID(), updatedAt: now };
-    guidelines.push(newGuideline);
-    setStoredGuidelines(guidelines);
-    return newGuideline as Guideline;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    } catch (e) {
+      console.error('Storage failed', e);
+      throw new Error('QUOTA_EXCEEDED: Image size too large or storage full. Try a smaller image.');
+    }
+    
+    return updatedOrNew;
   },
-  deleteGuideline: async (id: string): Promise<void> => {
-    const guidelines = getStoredGuidelines();
-    setStoredGuidelines(guidelines.filter(g => g.id !== id));
+
+  deleteGuideline: (id: string): void => {
+    const all = guidelineService.getGuidelines().filter(g => g.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   }
 };

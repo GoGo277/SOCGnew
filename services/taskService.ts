@@ -1,50 +1,56 @@
+
 import { Task, TaskStatus } from '../types';
 
-const STORAGE_KEY = 'tasks';
-
-const getStoredTasks = (): any[] => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
-};
-
-const setStoredTasks = (data: any[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-};
+const STORAGE_KEY = 'soc_tasks_data';
 
 export const taskService = {
-  getTasks: async (): Promise<Task[]> => {
-    const tasks = getStoredTasks();
-    return tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  getTasks: (): Task[] => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
   },
-  saveTask: async (task: Omit<Task, 'id' | 'createdAt'> & { id?: string }): Promise<Task | null> => {
-    const tasks = getStoredTasks();
+
+  saveTask: (task: Omit<Task, 'id' | 'createdAt' | 'status'> & { id?: string, status?: TaskStatus }): Task => {
+    const tasks = taskService.getTasks();
     const now = new Date().toISOString();
     
     if (task.id) {
       const index = tasks.findIndex(t => t.id === task.id);
       if (index !== -1) {
-        tasks[index] = { ...tasks[index], ...task };
-        setStoredTasks(tasks);
-        return tasks[index];
+        const updatedTask: Task = {
+          ...tasks[index],
+          ...task,
+          id: task.id,
+        };
+        tasks[index] = updatedTask;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        return updatedTask;
       }
-      return null;
     }
 
-    const newTask = { ...task, id: crypto.randomUUID(), createdAt: now };
+    const newTask: Task = {
+      ...task,
+      id: `task-${crypto.randomUUID()}`,
+      status: task.status || 'Todo',
+      createdAt: now,
+    } as Task;
+
     tasks.push(newTask);
-    setStoredTasks(tasks);
-    return newTask as Task;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    return newTask;
   },
-  updateTaskStatus: async (id: string, status: TaskStatus): Promise<void> => {
-    const tasks = getStoredTasks();
+
+  updateTaskStatus: (id: string, status: TaskStatus): void => {
+    const tasks = taskService.getTasks();
     const index = tasks.findIndex(t => t.id === id);
     if (index !== -1) {
       tasks[index].status = status;
-      setStoredTasks(tasks);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
     }
   },
-  deleteTask: async (id: string): Promise<void> => {
-    const tasks = getStoredTasks();
-    setStoredTasks(tasks.filter(t => t.id !== id));
+
+  deleteTask: (id: string): void => {
+    const tasks = taskService.getTasks();
+    const filtered = tasks.filter(t => t.id !== id);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
   }
 };

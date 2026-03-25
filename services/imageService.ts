@@ -1,13 +1,35 @@
+
+const STORAGE_KEY = 'soc_media_vault';
+
 export const imageService = {
-  saveImage: async (base64Data: string): Promise<string> => {
+  saveImage: (base64Data: string): string => {
     const id = `img-${crypto.randomUUID().substring(0, 8)}`;
-    localStorage.setItem(`image_${id}`, base64Data);
+    const vault = imageService.getAllImages();
+    vault[id] = base64Data;
+    
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(vault));
+    } catch (e) {
+      console.error('Media vault storage failed', e);
+      throw new Error('QUOTA_EXCEEDED: Media vault is full. Please remove some old documents or images.');
+    }
+    
     return id;
   },
-  getImage: async (id: string): Promise<string | null> => {
-    return localStorage.getItem(`image_${id}`) || null;
+
+  getImage: (id: string): string | null => {
+    const vault = imageService.getAllImages();
+    return vault[id] || null;
   },
-  deleteImage: async (id: string): Promise<void> => {
-    localStorage.removeItem(`image_${id}`);
+
+  getAllImages: (): Record<string, string> => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : {};
+  },
+
+  deleteImage: (id: string): void => {
+    const vault = imageService.getAllImages();
+    delete vault[id];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(vault));
   }
 };

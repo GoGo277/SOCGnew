@@ -25,8 +25,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
 
   const handleSave = () => {
     setLoading(true);
-    setTimeout(async () => {
-      await settingsService.saveUser({ id: user.id, bio, profilePic });
+    setTimeout(() => {
+      settingsService.saveUser({ id: user.id, bio, profilePic });
       onUpdate();
       setLoading(false);
       alert('Profile updated.');

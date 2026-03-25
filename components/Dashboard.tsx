@@ -1,7 +1,7 @@
 
 import React, { useMemo } from 'react';
-import { Asset, Incident, Task, ApprovalRequest, Announcement, Language, Guideline, AuditLog } from '../types';
-import { auditService } from '../services/auditService';
+import { Asset, Incident, Task, ApprovalRequest, Announcement, Language, Guideline } from '../types';
+import { auditService, AuditLog } from '../services/auditService';
 import { 
   Database, ShieldCheck, AlertTriangle, Activity, 
   CheckCircle2, ClipboardList, Megaphone, Zap, 
@@ -76,15 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [auditLogs]);
 
   // Popularity Matrix
-  const [popularity, setPopularity] = React.useState<{ topAssets: any[], topIncidents: any[] }>({ topAssets: [], topIncidents: [] });
-  
-  React.useEffect(() => {
-    const loadPopularity = async () => {
-      const stats = await auditService.getPopularityStats();
-      setPopularity(stats);
-    };
-    loadPopularity();
-  }, [auditLogs]);
+  const popularity = useMemo(() => auditService.getPopularityStats(), [auditLogs]);
 
   // Comprehensive Activity Stream
   const activityStream = useMemo(() => {

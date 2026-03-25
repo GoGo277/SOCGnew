@@ -27,11 +27,10 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadData = async () => {
-    const data = await chatService.getRooms();
+  const loadData = () => {
+    const data = chatService.getRooms();
     setRooms(data);
-    const allUsers = await settingsService.getUsers();
-    setUsers(allUsers.filter(u => u.id !== currentUser.id));
+    setUsers(settingsService.getUsers().filter(u => u.id !== currentUser.id));
     if (data.length > 0 && !activeRoomId) setActiveRoomId(data[0].id);
   };
 
@@ -39,7 +38,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
 
   useEffect(() => {
     if (activeRoomId) {
-      const loadMessages = async () => setMessages(await chatService.getMessages(activeRoomId));
+      const loadMessages = () => setMessages(chatService.getMessages(activeRoomId));
       loadMessages();
       const interval = setInterval(loadMessages, 3000);
       return () => clearInterval(interval);
@@ -50,13 +49,12 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSendMessage = async (e?: React.FormEvent, mediaUrl?: string) => {
+  const handleSendMessage = (e?: React.FormEvent, mediaUrl?: string) => {
     if (e) e.preventDefault();
     if (!inputText.trim() && !mediaUrl) return;
     if (!activeRoomId) return;
 
-    await chatService.sendMessage(activeRoomId, {
-      roomId: activeRoomId,
+    chatService.sendMessage(activeRoomId, {
       senderId: currentUser.id,
       senderName: currentUser.username,
       content: inputText,
@@ -66,17 +64,15 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
     setInputText('');
   };
 
-  const handleStartDM = async (targetUser: User) => {
-    const room = await chatService.createRoom(
+  const handleStartDM = (targetUser: User) => {
+    const room = chatService.createRoom(
       targetUser.username, 
       'direct', 
       [currentUser.id, targetUser.id]
     );
-    if (room) {
-      setActiveRoomId(room.id);
-      setShowNewRoomModal(false);
-      loadData();
-    }
+    setActiveRoomId(room.id);
+    setShowNewRoomModal(false);
+    loadData();
   };
 
   const activeRoom = rooms.find(r => r.id === activeRoomId);

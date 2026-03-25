@@ -21,45 +21,27 @@ interface GuidelinesPageProps {
 }
 
 const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
-  const [parsedHtml, setParsedHtml] = useState<{__html: string}>({__html: ''});
+  const parseContent = (text: string) => {
+    const images = imageService.getAllImages();
+    let html = text
+      .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-black text-white border-b border-zinc-800 pb-4 mb-6">$1</h1>')
+      .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold text-zinc-100 mt-8 mb-4">$1</h2>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/\[color=(.*?)\](.*?)\[\/color\]/g, '<span style="color: $1">$2</span>')
+      .replace(/^- (.*$)/gm, '<li class="ml-6 text-zinc-400 list-disc my-1">$1</li>')
+      .replace(/^[0-9]\. (.*$)/gm, '<li class="ml-6 text-zinc-400 list-decimal my-1">$1</li>');
 
-  useEffect(() => {
-    const parseContent = async (text: string) => {
-      let html = text
-        .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-black text-white border-b border-zinc-800 pb-4 mb-6">$1</h1>')
-        .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold text-zinc-100 mt-8 mb-4">$1</h2>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/\[color=(.*?)\](.*?)\[\/color\]/g, '<span style="color: $1">$2</span>')
-        .replace(/^- (.*$)/gm, '<li class="ml-6 text-zinc-400 list-disc my-1">$1</li>')
-        .replace(/^[0-9]\. (.*$)/gm, '<li class="ml-6 text-zinc-400 list-decimal my-1">$1</li>');
+    html = html.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
+      const actualSrc = src.startsWith('img-') ? images[src] : src;
+      return `<div class="my-8 flex justify-center flex-col items-center"><img src="${actualSrc}" class="rounded-2xl border border-zinc-800 shadow-2xl max-h-[500px] w-auto" /><p class="text-[10px] text-zinc-600 mt-2 uppercase font-black tracking-widest">${alt}</p></div>`;
+    });
 
-      // Async replace for images
-      const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
-      let match;
-      let finalHtml = html;
-      
-      while ((match = imgRegex.exec(html)) !== null) {
-        const alt = match[1];
-        const src = match[2];
-        let actualSrc = src;
-        
-        if (src.startsWith('img-')) {
-          actualSrc = await imageService.getImage(src) || src;
-        }
-        
-        const imgTag = `<div class="my-8 flex justify-center flex-col items-center"><img src="${actualSrc}" class="rounded-2xl border border-zinc-800 shadow-2xl max-h-[500px] w-auto" /><p class="text-[10px] text-zinc-600 mt-2 uppercase font-black tracking-widest">${alt}</p></div>`;
-        finalHtml = finalHtml.replace(match[0], imgTag);
-      }
+    return { __html: html.split('\n').join('<br />') };
+  };
 
-      setParsedHtml({ __html: finalHtml.split('\n').join('<br />') });
-    };
-
-    parseContent(content);
-  }, [content]);
-
-  return <div className="prose prose-invert max-w-none text-zinc-300 guideline-render select-text" dangerouslySetInnerHTML={parsedHtml} />;
+  return <div className="prose prose-invert max-w-none text-zinc-300 guideline-render select-text" dangerouslySetInnerHTML={parseContent(content)} />;
 };
 
 const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permissions, guidelines, onRefresh, language }) => {
@@ -105,9 +87,9 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
     if (file) {
       setIsUploading(true);
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         try {
-          const imageId = await imageService.saveImage(reader.result as string);
+          const imageId = imageService.saveImage(reader.result as string);
           insertText(`\n![Tactical Observation](${imageId})\n`, '');
         } catch (err) {
           alert(String(err));
@@ -120,25 +102,23 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!editForm.title || !editForm.content) return;
     
     if (currentUser.role !== 'Admin') {
       requestService.createRequest(currentUser, activeGuideline ? 'EDIT_GUIDELINE' : 'ADD_GUIDELINE', activeGuideline ? { ...editForm, id: activeGuideline.id } : editForm, 'Requested via SOP Editor');
       setIsEditing(false);
     } else {
-      const saved = await guidelineService.saveGuideline(activeGuideline ? { ...editForm, id: activeGuideline.id } : editForm);
+      const saved = guidelineService.saveGuideline(activeGuideline ? { ...editForm, id: activeGuideline.id } : editForm);
       setIsEditing(false);
-      if (saved) {
-        setActiveGuideline(saved);
-        onRefresh(); // Refresh parent state
-      }
+      setActiveGuideline(saved);
+      onRefresh(); // Refresh parent state
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (activeGuideline) {
-      await guidelineService.deleteGuideline(activeGuideline.id);
+      guidelineService.deleteGuideline(activeGuideline.id);
       setIsDeleteModalOpen(false);
       setActiveGuideline(null);
       onRefresh(); // Refresh parent state

@@ -91,11 +91,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
     });
   };
 
-  const handleSaveUser = async (e: React.FormEvent) => {
+  const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userFormData.username) return;
-    await settingsService.saveUser(editingUserId ? { ...userFormData, id: editingUserId } : userFormData);
-    onUsersUpdate(await settingsService.getUsers());
+    settingsService.saveUser(editingUserId ? { ...userFormData, id: editingUserId } : userFormData);
+    onUsersUpdate(settingsService.getUsers());
     setIsUserFormOpen(false);
     setEditingUserId(null);
     setUserFormData({ username: '', email: '', password: '', role: 'L1' });
@@ -209,7 +209,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                          <tr key={u.id} className="hover:bg-zinc-800/20 transition-all group">
                             <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.username.substring(0, 2).toUpperCase()}</div><div><p className="font-bold text-white text-sm">{u.username}</p><p className="text-[10px] text-zinc-500 font-mono">{u.email}</p></div></div></td>
                             <td className="p-5 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.role}</span></td>
-                            <td className="p-5 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => startEditUser(u)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all"><Edit3 className="w-4 h-4" /></button><button onClick={async () => { if(confirm('Delete user?')) { await settingsService.deleteUser(u.id); onUsersUpdate(await settingsService.getUsers()); } }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button></div></td>
+                            <td className="p-5 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => startEditUser(u)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all"><Edit3 className="w-4 h-4" /></button><button onClick={() => { if(confirm('Delete user?')) { settingsService.deleteUser(u.id); onUsersUpdate(settingsService.getUsers()); } }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button></div></td>
                          </tr>
                        ))}
                     </tbody>

@@ -42,16 +42,16 @@ const TasksPage: React.FC<TasksPageProps> = ({ currentUser, permissions, languag
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setTasks(await taskService.getTasks());
-    setUsers(await settingsService.getUsers());
+  const loadData = () => {
+    setTasks(taskService.getTasks());
+    setUsers(settingsService.getUsers());
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.assignedTo) return;
     
-    await taskService.saveTask({
+    taskService.saveTask({
       ...formData,
       id: editingTask?.id,
       creatorId: currentUser.id,
@@ -84,17 +84,17 @@ const TasksPage: React.FC<TasksPageProps> = ({ currentUser, permissions, languag
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (taskToDelete) {
-      await taskService.deleteTask(taskToDelete.id);
+      taskService.deleteTask(taskToDelete.id);
       setIsDeleteModalOpen(false);
       setTaskToDelete(null);
       loadData();
     }
   };
 
-  const handleStatusChange = async (id: string, status: TaskStatus) => {
-    await taskService.updateTaskStatus(id, status);
+  const handleStatusChange = (id: string, status: TaskStatus) => {
+    taskService.updateTaskStatus(id, status);
     loadData();
   };
 

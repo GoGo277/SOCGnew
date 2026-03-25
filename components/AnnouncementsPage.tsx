@@ -17,42 +17,24 @@ interface AnnouncementsPageProps {
 }
 
 const AnnouncementRenderer: React.FC<{ content: string }> = ({ content }) => {
-  const [parsedHtml, setParsedHtml] = useState<{__html: string}>({__html: ''});
+  const parseContent = (text: string) => {
+    const images = imageService.getAllImages();
+    let html = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/__(.*?)__/g, '<u>$1</u>')
+      .replace(/^- (.*$)/gm, '<li class="ml-4 text-zinc-400 list-disc">$1</li>')
+      .replace(/^[0-9]\. (.*$)/gm, '<li class="ml-4 text-zinc-400 list-decimal">$1</li>');
 
-  useEffect(() => {
-    const parseContent = async (text: string) => {
-      let html = text
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/__(.*?)__/g, '<u>$1</u>')
-        .replace(/^- (.*$)/gm, '<li class="ml-4 text-zinc-400 list-disc">$1</li>')
-        .replace(/^[0-9]\. (.*$)/gm, '<li class="ml-4 text-zinc-400 list-decimal">$1</li>');
+    html = html.replace(/!\[(.*?)\]\((.*?)\)/g, (match, alt, src) => {
+      const actualSrc = src.startsWith('img-') ? images[src] : src;
+      return `<div class="my-4"><img src="${actualSrc}" alt="${alt}" class="rounded-xl border border-zinc-800 shadow-lg max-h-[400px] w-auto mx-auto" /></div>`;
+    });
 
-      // Async replace for images
-      const imgRegex = /!\[(.*?)\]\((.*?)\)/g;
-      let match;
-      let finalHtml = html;
-      
-      while ((match = imgRegex.exec(html)) !== null) {
-        const alt = match[1];
-        const src = match[2];
-        let actualSrc = src;
-        
-        if (src.startsWith('img-')) {
-          actualSrc = await imageService.getImage(src) || src;
-        }
-        
-        const imgTag = `<div class="my-4"><img src="${actualSrc}" alt="${alt}" class="rounded-xl border border-zinc-800 shadow-lg max-h-[400px] w-auto mx-auto" /></div>`;
-        finalHtml = finalHtml.replace(match[0], imgTag);
-      }
+    return { __html: html.split('\n').join('<br />') };
+  };
 
-      setParsedHtml({ __html: finalHtml.split('\n').join('<br />') });
-    };
-
-    parseContent(content);
-  }, [content]);
-
-  return <div className="text-sm leading-relaxed text-zinc-300 font-medium" dangerouslySetInnerHTML={parsedHtml} />;
+  return <div className="text-sm leading-relaxed text-zinc-300 font-medium" dangerouslySetInnerHTML={parseContent(content)} />;
 };
 
 const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, language }) => {
@@ -76,9 +58,8 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadData = async () => {
-    const fetchedAnnouncements = await announcementService.getAnnouncements();
-    setAnnouncements(fetchedAnnouncements);
+  const loadData = () => {
+    setAnnouncements(announcementService.getAnnouncements());
     setUsers(settingsService.getUsers());
   };
 
@@ -110,7 +91,7 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
       reader.onloadend = async () => {
         try {
           const base64 = reader.result as string;
-          const imageId = await imageService.saveImage(base64);
+          const imageId = imageService.saveImage(base64);
           insertText(`\n![Attachment](${imageId})\n`, '');
         } finally {
           setIsProcessingImage(false);
@@ -121,12 +102,12 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!formData.title || !formData.content) return;
     if (editingId) {
-      await announcementService.deleteAnnouncement(editingId);
+      announcementService.deleteAnnouncement(editingId);
     }
-    await announcementService.saveAnnouncement({
+    announcementService.saveAnnouncement({
       ...formData,
       authorId: currentUser.id,
       authorName: currentUser.username
@@ -157,9 +138,9 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
     setIsDeleteModalOpen(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = () => {
     if (itemToDelete) {
-      await announcementService.deleteAnnouncement(itemToDelete);
+      announcementService.deleteAnnouncement(itemToDelete);
       loadData();
       setIsDeleteModalOpen(false);
       setItemToDelete(null);

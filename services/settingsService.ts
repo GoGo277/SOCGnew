@@ -1,154 +1,211 @@
-import { AppSettings, User } from '../types';
 
-const STORAGE_KEY = 'app_settings';
-const USERS_STORAGE_KEY = 'app_users';
-const SESSION_STORAGE_KEY = 'app_session';
+import { AppSettings, User, UserRole, RolePermissions, Language } from '../types';
 
-const defaultSettings: AppSettings = {
-  appName: 'SOC Asset Guardian',
+const SETTINGS_KEY = 'soc_app_settings';
+const USERS_KEY = 'soc_app_users';
+const SESSION_KEY = 'soc_active_session';
+
+const DEFAULT_NAV_ORDER = ['dashboard', 'assets', 'incidents', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests'];
+
+const DEFAULT_SETTINGS: AppSettings = {
+  appName: 'Guardian SOC',
+  logoUrl: '',
   language: 'en',
-  navOrder: ['dashboard', 'assets', 'incidents', 'guidelines', 'messaging', 'announcements', 'tasks'],
+  navOrder: [...DEFAULT_NAV_ORDER],
   rolePermissions: {
     Admin: {
-      canCreateAsset: true, canEditAsset: true, canDeleteAsset: true,
-      canCreateIncident: true, canEditIncident: true, canDeleteIncident: true,
-      canCreateGuideline: true, canEditGuideline: true, canDeleteGuideline: true,
-      canManageUsers: true, canApproveRequests: true, canManageTasks: true,
-      canImportExport: true, canDeleteNotes: true,
-      visiblePages: { dashboard: true, assets: true, incidents: true, guidelines: true, messaging: true, announcements: true, tasks: true }
-    },
-    L1: {
-      canCreateAsset: false, canEditAsset: false, canDeleteAsset: false,
-      canCreateIncident: false, canEditIncident: false, canDeleteIncident: false,
-      canCreateGuideline: false, canEditGuideline: false, canDeleteGuideline: false,
-      canManageUsers: false, canApproveRequests: false, canManageTasks: false,
-      canImportExport: false, canDeleteNotes: false,
+      canCreateAsset: true,
+      canEditAsset: true,
+      canDeleteAsset: true,
+      canCreateIncident: true,
+      canEditIncident: true,
+      canDeleteIncident: true,
+      canCreateGuideline: true,
+      canEditGuideline: true,
+      canDeleteGuideline: true,
+      canManageUsers: true,
+      canApproveRequests: true,
+      canManageTasks: true,
+      canImportExport: true,
+      canDeleteNotes: true,
       visiblePages: { dashboard: true, assets: true, incidents: true, guidelines: true, messaging: true, announcements: true, tasks: true }
     },
     L2: {
-      canCreateAsset: true, canEditAsset: true, canDeleteAsset: false,
-      canCreateIncident: true, canEditIncident: true, canDeleteIncident: false,
-      canCreateGuideline: false, canEditGuideline: false, canDeleteGuideline: false,
-      canManageUsers: false, canApproveRequests: false, canManageTasks: true,
-      canImportExport: true, canDeleteNotes: false,
+      canCreateAsset: true,
+      canEditAsset: false,
+      canDeleteAsset: false,
+      canCreateIncident: true,
+      canEditIncident: true,
+      canDeleteIncident: false,
+      canCreateGuideline: true,
+      canEditGuideline: true,
+      canDeleteGuideline: false,
+      canManageUsers: false,
+      canApproveRequests: false,
+      canManageTasks: true,
+      canImportExport: false,
+      canDeleteNotes: false,
+      visiblePages: { dashboard: true, assets: true, incidents: true, guidelines: true, messaging: true, announcements: true, tasks: true }
+    },
+    L1: {
+      canCreateAsset: false,
+      canEditAsset: false,
+      canDeleteAsset: false,
+      canCreateIncident: true,
+      canEditIncident: false,
+      canDeleteIncident: false,
+      canCreateGuideline: false,
+      canEditGuideline: false,
+      canDeleteGuideline: false,
+      canManageUsers: false,
+      canApproveRequests: false,
+      canManageTasks: false,
+      canImportExport: false,
+      canDeleteNotes: false,
       visiblePages: { dashboard: true, assets: true, incidents: true, guidelines: true, messaging: true, announcements: true, tasks: true }
     }
   }
 };
 
-const defaultUsers: User[] = [
+const DEFAULT_USERS: User[] = [
   {
-    id: 'admin-1',
-    username: 'admin',
-    email: 'admin@example.com',
-    password: 'password', // In a real app, this would be hashed
+    id: 'u1',
+    username: 'Admin',
+    email: 'admin@guardian.sec',
+    password: 'admin',
     role: 'Admin',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    bio: 'Security Operations Center Lead. Managing global asset perimeter.',
+    profilePic: ''
   }
 ];
 
-const getStoredSettings = (): AppSettings => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : defaultSettings;
-};
-
-const setStoredSettings = (data: AppSettings) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-};
-
-const getStoredUsers = (): User[] => {
-  const data = localStorage.getItem(USERS_STORAGE_KEY);
-  return data ? JSON.parse(data) : defaultUsers;
-};
-
-const setStoredUsers = (data: User[]) => {
-  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(data));
-};
-
 export const settingsService = {
-  getSettings: async (): Promise<AppSettings> => {
-    return getStoredSettings();
-  },
-  saveSettings: async (settings: AppSettings): Promise<AppSettings | null> => {
-    setStoredSettings(settings);
-    return settings;
-  },
-  getUsers: async (): Promise<User[]> => {
-    return getStoredUsers();
-  },
-  saveUser: async (user: Omit<User, 'id' | 'createdAt'> & { id?: string }): Promise<User> => {
-    const users = getStoredUsers();
-    if (user.id) {
-      const index = users.findIndex(u => u.id === user.id);
-      if (index !== -1) {
-        users[index] = { ...users[index], ...user };
-        setStoredUsers(users);
-        return users[index];
-      }
-    }
-    const newUser: User = {
-      ...user,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString()
-    };
-    users.push(newUser);
-    setStoredUsers(users);
-    return newUser;
-  },
-  deleteUser: async (id: string): Promise<void> => {
-    const users = getStoredUsers();
-    setStoredUsers(users.filter(u => u.id !== id));
-  },
-  authenticate: async (email: string, password?: string): Promise<{ user: User | null, error: string | null }> => {
-    const users = getStoredUsers();
-    const user = users.find(u => u.email === email && (!password || u.password === password));
-    if (user) {
-      const sessionUser = { ...user };
-      delete sessionUser.password;
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionUser));
-      return { user: sessionUser, error: null };
-    }
-    return { user: null, error: 'Invalid credentials' };
-  },
-  getActiveSession: async (): Promise<User | null> => {
-    const data = localStorage.getItem(SESSION_STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
-  },
-  logout: async (): Promise<void> => {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-  },
-  exportFullSystem: async (): Promise<string> => {
-    const data = {
-      settings: getStoredSettings(),
-      users: getStoredUsers(),
-      assets: JSON.parse(localStorage.getItem('assets') || '[]'),
-      incidents: JSON.parse(localStorage.getItem('incidents') || '[]'),
-      guidelines: JSON.parse(localStorage.getItem('guidelines') || '[]'),
-      announcements: JSON.parse(localStorage.getItem('announcements') || '[]'),
-      tasks: JSON.parse(localStorage.getItem('tasks') || '[]'),
-      chat_rooms: JSON.parse(localStorage.getItem('chat_rooms') || '[]'),
-      messages: JSON.parse(localStorage.getItem('messages') || '[]'),
-      audit_logs: JSON.parse(localStorage.getItem('audit_logs') || '[]'),
-      approval_requests: JSON.parse(localStorage.getItem('approval_requests') || '[]')
-    };
-    return JSON.stringify(data, null, 2);
-  },
-  importFullSystem: async (jsonData: string): Promise<void> => {
+  getSettings: (): AppSettings => {
     try {
-      const data = JSON.parse(jsonData);
-      if (data.settings) setStoredSettings(data.settings);
-      if (data.users) setStoredUsers(data.users);
-      if (data.assets) localStorage.setItem('assets', JSON.stringify(data.assets));
-      if (data.incidents) localStorage.setItem('incidents', JSON.stringify(data.incidents));
-      if (data.guidelines) localStorage.setItem('guidelines', JSON.stringify(data.guidelines));
-      if (data.announcements) localStorage.setItem('announcements', JSON.stringify(data.announcements));
-      if (data.tasks) localStorage.setItem('tasks', JSON.stringify(data.tasks));
-      if (data.chat_rooms) localStorage.setItem('chat_rooms', JSON.stringify(data.chat_rooms));
-      if (data.messages) localStorage.setItem('messages', JSON.stringify(data.messages));
-      if (data.audit_logs) localStorage.setItem('audit_logs', JSON.stringify(data.audit_logs));
-      if (data.approval_requests) localStorage.setItem('approval_requests', JSON.stringify(data.approval_requests));
+      const data = localStorage.getItem(SETTINGS_KEY);
+      const parsed = data ? JSON.parse(data) : { ...DEFAULT_SETTINGS };
+      if (!parsed.language) parsed.language = 'en';
+      if (!parsed.navOrder) parsed.navOrder = [...DEFAULT_NAV_ORDER];
+      return parsed;
     } catch (e) {
-      throw new Error('Invalid backup file format');
+      return DEFAULT_SETTINGS;
     }
+  },
+
+  saveSettings: (settings: AppSettings): void => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new Event('storage'));
+  },
+
+  getUsers: (): User[] => {
+    try {
+      const data = localStorage.getItem(USERS_KEY);
+      if (!data) {
+        localStorage.setItem(USERS_KEY, JSON.stringify(DEFAULT_USERS));
+        return DEFAULT_USERS;
+      }
+      return JSON.parse(data);
+    } catch (e) {
+      return DEFAULT_USERS;
+    }
+  },
+
+  saveUser: (user: Partial<User> & { id?: string }): User => {
+    const users = settingsService.getUsers();
+    const activeSession = settingsService.getActiveSession();
+    let savedUser: User;
+    
+    if (user.id) {
+      const idx = users.findIndex(u => u.id === user.id);
+      if (idx !== -1) {
+        const existingUser = users[idx];
+        savedUser = { ...existingUser, ...user } as User;
+        users[idx] = savedUser;
+      } else {
+        return settingsService.saveUser({ ...user, id: undefined });
+      }
+    } else {
+      savedUser = {
+        id: `user-${crypto.randomUUID()}`,
+        username: user.username || 'Analyst',
+        email: user.email || '',
+        role: user.role || 'L1',
+        password: user.password || 'password123',
+        createdAt: new Date().toISOString(),
+        bio: user.bio || '',
+        profilePic: user.profilePic || ''
+      };
+      users.push(savedUser);
+    }
+
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    if (activeSession && savedUser.id === activeSession.id) {
+      const { password, ...sessionData } = savedUser;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+    }
+    window.dispatchEvent(new Event('storage'));
+    return savedUser;
+  },
+
+  deleteUser: (id: string): void => {
+    const users = settingsService.getUsers().filter(u => u.id !== id);
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+    const activeSession = settingsService.getActiveSession();
+    if (activeSession && id === activeSession.id) {
+      settingsService.logout();
+    }
+    window.dispatchEvent(new Event('storage'));
+  },
+
+  authenticate: (username: string, pass: string): User | null => {
+    const users = settingsService.getUsers();
+    const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === pass);
+    if (user) {
+      const { password, ...sessionUser } = user;
+      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+      return sessionUser as User;
+    }
+    return null;
+  },
+
+  getActiveSession: (): User | null => {
+    try {
+      const data = localStorage.getItem(SESSION_KEY);
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  logout: (): void => {
+    localStorage.removeItem(SESSION_KEY);
+    window.dispatchEvent(new Event('storage'));
+  },
+
+  exportFullSystem: (): string => {
+    const keys = [
+      'soc_assets_data', 'soc_incidents_data', 'soc_app_settings', 
+      'soc_app_users', 'soc_guidelines_data', 'soc_announcements', 
+      'soc_tasks_data', 'soc_approval_requests', 'soc_audit_logs'
+    ];
+    const archive: Record<string, any> = {
+      archive_timestamp: new Date().toISOString(),
+      archive_version: '3.0'
+    };
+    keys.forEach(key => {
+      const val = localStorage.getItem(key);
+      if (val) archive[key] = JSON.parse(val);
+    });
+    return JSON.stringify(archive, null, 2);
+  },
+
+  importFullSystem: (archive: any): void => {
+    Object.entries(archive).forEach(([key, val]) => {
+      if (key.startsWith('soc_')) {
+        localStorage.setItem(key, JSON.stringify(val));
+      }
+    });
+    window.dispatchEvent(new Event('storage'));
   }
 };

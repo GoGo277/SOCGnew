@@ -1,34 +1,74 @@
-import { AuditLog, User } from '../types';
 
-const STORAGE_KEY = 'audit_logs';
+import { User } from '../types';
 
-const getStoredLogs = (): any[] => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
-};
+export type AuditAction = 
+  | 'LOGIN' | 'LOGOUT' 
+  | 'VIEW_ASSET' | 'VIEW_INCIDENT' 
+  | 'CREATE_ASSET' | 'EDIT_ASSET' | 'DELETE_ASSET'
+  | 'CREATE_INCIDENT' | 'EDIT_INCIDENT' | 'DELETE_INCIDENT'
+  | 'SOP_COMMIT' | 'REQUEST_CREATED' | 'REQUEST_RESOLVED'
+  | 'TASK_DEPLOY' | 'TASK_STATUS_CHANGE'
+  | 'ANNOUNCEMENT_POST';
 
-const setStoredLogs = (data: any[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-};
+export interface AuditLog {
+  id: string;
+  userId: string;
+  username: string;
+  action: AuditAction;
+  targetId?: string;
+  targetName?: string;
+  timestamp: string;
+  metadata?: any;
+}
+
+const STORAGE_KEY = 'soc_audit_logs';
 
 export const auditService = {
-  getLogs: async (): Promise<AuditLog[]> => {
-    const logs = getStoredLogs();
-    return logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  getLogs: (): AuditLog[] => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
   },
-  logAction: async (userId: string, userName: string, action: string, details: string): Promise<void> => {
-    const logs = getStoredLogs();
-    const now = new Date().toISOString();
-    logs.push({ id: crypto.randomUUID(), userId, userName, action, details, timestamp: now });
-    setStoredLogs(logs);
+
+  log: (user: User, action: AuditAction, target?: { id: string, name: string }, metadata?: any): void => {
+    const logs = auditService.getLogs();
+    const newLog: AuditLog = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      username: user.username,
+      action,
+      targetId: target?.id,
+      targetName: target?.name,
+      timestamp: new Date().toISOString(),
+      metadata
+    };
+    // Keep only last 500 logs to prevent storage bloat
+    const updatedLogs = [newLog, ...logs].slice(0, 500);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLogs));
   },
-  log: async (user: User, action: string, target?: any, extra?: any): Promise<void> => {
-    const logs = getStoredLogs();
-    const now = new Date().toISOString();
-    let details = '';
-    if (target) details += `Target: ${target.name || target.id || JSON.stringify(target)}. `;
-    if (extra) details += `Details: ${JSON.stringify(extra)}`;
-    logs.push({ id: crypto.randomUUID(), userId: user.id, userName: user.username, action, details: details.trim(), timestamp: now });
-    setStoredLogs(logs);
+
+  getPopularityStats: () => {
+    const logs = auditService.getLogs();
+    const assetViews: Record<string, { name: string, count: number }> = {};
+    const incidentViews: Record<string, { name: string, count: number }> = {};
+
+    logs.forEach(log => {
+      if (log.action === 'VIEW_ASSET' && log.targetId) {
+        assetViews[log.targetId] = { 
+          name: log.targetName || 'Unknown', 
+          count: (assetViews[log.targetId]?.count || 0) + 1 
+        };
+      }
+      if (log.action === 'VIEW_INCIDENT' && log.targetId) {
+        incidentViews[log.targetId] = { 
+          name: log.targetName || 'Unknown', 
+          count: (incidentViews[log.targetId]?.count || 0) + 1 
+        };
+      }
+    });
+
+    return {
+      topAssets: Object.values(assetViews).sort((a, b) => b.count - a.count).slice(0, 5),
+      topIncidents: Object.values(incidentViews).sort((a, b) => b.count - a.count).slice(0, 5)
+    };
   }
 };

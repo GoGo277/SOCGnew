@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Asset, Note, Incident, User, AppSettings, Notification, ApprovalRequest, AssetType, Severity, IncidentStatus, Task, Announcement, Guideline, AuditLog } from './types';
+import { Asset, Note, Incident, User, AppSettings, Notification, ApprovalRequest, AssetType, Severity, IncidentStatus, Task, Announcement, Guideline } from './types';
 import { assetService } from './services/assetService';
 import { incidentService } from './services/incidentService';
 import { settingsService } from './services/settingsService';
@@ -9,7 +9,7 @@ import { taskService } from './services/taskService';
 import { announcementService } from './services/announcementService';
 import { guidelineService } from './services/guidelineService';
 import { chatService } from './services/chatService';
-import { auditService } from './services/auditService';
+import { auditService, AuditLog } from './services/auditService';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import AssetModal from './components/AssetModal';
@@ -102,32 +102,24 @@ const App: React.FC = () => {
 
   const showToast = (message: string) => setToast({ message, isOpen: true });
 
-  const loadData = useCallback(async () => {
-    const session = await settingsService.getActiveSession();
+  const loadData = useCallback(() => {
+    const session = settingsService.getActiveSession();
     if (!session) {
       setCurrentUser(null);
       return;
     }
     try {
       setCurrentUser(session);
-      const fetchedAssets = await assetService.getAssets();
-      setAssets(fetchedAssets);
-      const fetchedIncidents = await incidentService.getIncidents();
-      setIncidents(fetchedIncidents);
-      const fetchedTasks = await taskService.getTasks();
-      setTasks(fetchedTasks);
-      const fetchedAnnouncements = await announcementService.getAnnouncements();
-      setAnnouncements(fetchedAnnouncements);
-      const fetchedRequests = await requestService.getRequests();
-      setRequests(fetchedRequests);
-      const fetchedGuidelines = await guidelineService.getGuidelines();
-      setGuidelines(fetchedGuidelines);
-      const fetchedAuditLogs = await auditService.getLogs();
-      setAuditLogs(fetchedAuditLogs);
-      setUsers(await settingsService.getUsers());
-      setSettings(await settingsService.getSettings());
-      const fetchedNotifications = await requestService.getNotifications(session.id);
-      setNotifications(fetchedNotifications);
+      setAssets([...assetService.getAssets()]);
+      setIncidents([...incidentService.getIncidents()]);
+      setTasks([...taskService.getTasks()]);
+      setRequests([...requestService.getRequests()]);
+      setAnnouncements([...announcementService.getAnnouncements()]);
+      setGuidelines([...guidelineService.getGuidelines(session.role)]);
+      setAuditLogs([...auditService.getLogs()]);
+      setUsers([...settingsService.getUsers()]);
+      setSettings(settingsService.getSettings());
+      setNotifications(requestService.getNotifications(session.id));
     } catch (e) {
       console.error("Data loading failure", e);
     }
@@ -174,38 +166,32 @@ const App: React.FC = () => {
     localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(updated));
   };
 
-  const [navCounts, setNavCounts] = useState<Record<string, number>>({});
+  const navCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const pendingReqCount = requests.filter(r => r.status === 'PENDING').length;
+    counts['requests'] = pendingReqCount;
+    counts['admin-requests'] = pendingReqCount;
 
-  useEffect(() => {
-    const updateNavCounts = async () => {
-      const counts: Record<string, number> = {};
-      const pendingReqCount = requests.filter(r => r.status === 'PENDING').length;
-      counts['requests'] = pendingReqCount;
-      counts['admin-requests'] = pendingReqCount;
-
-      const isNew = (timestamp: string, lastSeenTime?: string) => {
-        if (!lastSeenTime) return true;
-        return new Date(timestamp).getTime() > new Date(lastSeenTime).getTime();
-      };
-
-      counts['assets'] = assets.filter(a => isNew(a.createdAt, lastSeen['assets']) || isNew(a.updatedAt, lastSeen['assets'])).length;
-      counts['incidents'] = incidents.filter(i => isNew(i.createdAt, lastSeen['incidents']) || isNew(i.updatedAt, lastSeen['incidents'])).length;
-      counts['guidelines'] = guidelines.filter(g => isNew(g.updatedAt, lastSeen['guidelines'])).length;
-      counts['announcements'] = announcements.filter(a => isNew(a.createdAt, lastSeen['announcements'])).length;
-      
-      const rooms = await chatService.getRooms();
-      let unreadMessages = 0;
-      for (const room of rooms) {
-        const messages = await chatService.getMessages(room.id);
-        if (messages.some(m => m.senderId !== currentUser?.id && isNew(m.timestamp, lastSeen['messaging']))) {
-          unreadMessages++;
-        }
-      }
-      counts['messaging'] = unreadMessages;
-      if (counts[activeTab] !== undefined) counts[activeTab] = 0;
-      setNavCounts(counts);
+    const isNew = (timestamp: string, lastSeenTime?: string) => {
+      if (!lastSeenTime) return true;
+      return new Date(timestamp).getTime() > new Date(lastSeenTime).getTime();
     };
-    updateNavCounts();
+
+    counts['assets'] = assets.filter(a => isNew(a.createdAt, lastSeen['assets']) || isNew(a.updatedAt, lastSeen['assets'])).length;
+    counts['incidents'] = incidents.filter(i => isNew(i.createdAt, lastSeen['incidents']) || isNew(i.updatedAt, lastSeen['incidents'])).length;
+    counts['guidelines'] = guidelines.filter(g => isNew(g.updatedAt, lastSeen['guidelines'])).length;
+    counts['announcements'] = announcements.filter(a => isNew(a.createdAt, lastSeen['announcements'])).length;
+    const rooms = chatService.getRooms();
+    let unreadMessages = 0;
+    rooms.forEach(room => {
+      const messages = chatService.getMessages(room.id);
+      if (messages.some(m => m.senderId !== currentUser?.id && isNew(m.timestamp, lastSeen['messaging']))) {
+        unreadMessages++;
+      }
+    });
+    counts['messaging'] = unreadMessages;
+    if (counts[activeTab] !== undefined) counts[activeTab] = 0;
+    return counts;
   }, [requests, assets, incidents, announcements, guidelines, lastSeen, currentUser, activeTab]);
 
   const handleLogin = (user: User) => {
@@ -226,39 +212,35 @@ const App: React.FC = () => {
 
   const permissions = settings.rolePermissions[currentUser.role];
 
-  const handleSaveAsset = async (assetData: any) => {
+  const handleSaveAsset = (assetData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateAsset || !permissions.canEditAsset)) {
-      await requestService.createRequest(currentUser, assetData.id ? 'EDIT_ASSET' : 'ADD_ASSET', assetData, 'Tactical Submission');
+      requestService.createRequest(currentUser, assetData.id ? 'EDIT_ASSET' : 'ADD_ASSET', assetData, 'Tactical Submission');
       auditService.log(currentUser, 'REQUEST_CREATED', { id: '', name: assetData.name }, { action: assetData.id ? 'EDIT_ASSET' : 'ADD_ASSET' });
       showToast("Protocol Request Logged");
     } else {
-      const saved = await assetService.saveAsset(assetData);
-      if (saved) {
-        auditService.log(currentUser, assetData.id ? 'EDIT_ASSET' : 'CREATE_ASSET', { id: saved.id, name: saved.name });
-        showToast("Asset Signal Updated");
-      }
+      const saved = assetService.saveAsset(assetData);
+      auditService.log(currentUser, assetData.id ? 'EDIT_ASSET' : 'CREATE_ASSET', { id: saved.id, name: saved.name });
+      showToast("Asset Signal Updated");
     }
     loadData();
     setIsAssetFormOpen(false);
   };
 
-  const handleSaveIncident = async (incidentData: any) => {
+  const handleSaveIncident = (incidentData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateIncident || !permissions.canEditIncident)) {
-      await requestService.createRequest(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'ADD_INCIDENT', incidentData, 'Tactical Submission');
+      requestService.createRequest(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'ADD_INCIDENT', incidentData, 'Tactical Submission');
       auditService.log(currentUser, 'REQUEST_CREATED', { id: '', name: incidentData.eventName }, { action: incidentData.id ? 'EDIT_INCIDENT' : 'ADD_INCIDENT' });
       showToast("Protocol Request Logged");
     } else {
-      const saved = await incidentService.saveIncident(incidentData);
-      if (saved) {
-        auditService.log(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'CREATE_INCIDENT', { id: saved.id, name: saved.eventName });
-        showToast("Incident Record Committed");
-      }
+      const saved = incidentService.saveIncident(incidentData);
+      auditService.log(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'CREATE_INCIDENT', { id: saved.id, name: saved.eventName });
+      showToast("Incident Record Committed");
     }
     loadData();
     setIsIncidentFormOpen(false);
   };
 
-  const handleSaveNote = async (note: Note) => {
+  const handleSaveNote = (note: Note) => {
     if (!noteTarget) return;
 
     if (noteTarget.type === 'asset') {
@@ -268,7 +250,7 @@ const App: React.FC = () => {
         const updatedNotes = [...target.notes];
         if (existingNoteIdx !== -1) updatedNotes[existingNoteIdx] = note;
         else updatedNotes.push(note);
-        await assetService.saveAsset({ ...target, notes: updatedNotes });
+        assetService.saveAsset({ ...target, notes: updatedNotes });
       }
     } else {
       const target = incidents.find(i => i.id === noteTarget.id);
@@ -277,7 +259,7 @@ const App: React.FC = () => {
         const updatedNotes = [...target.notes];
         if (existingNoteIdx !== -1) updatedNotes[existingNoteIdx] = note;
         else updatedNotes.push(note);
-        await incidentService.saveIncident({ ...target, notes: updatedNotes });
+        incidentService.saveIncident({ ...target, notes: updatedNotes });
       }
     }
     
@@ -294,13 +276,13 @@ const App: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = () => {
     if (deleteContext === 'asset' && assetToDelete) {
-      await assetService.deleteAsset(assetToDelete.id);
+      assetService.deleteAsset(assetToDelete.id);
       auditService.log(currentUser, 'DELETE_ASSET', { id: assetToDelete.id, name: assetToDelete.name });
       showToast("Asset Record Purged");
     } else if (deleteContext === 'incident' && incidentToDelete) {
-      await incidentService.deleteIncident(incidentToDelete.id);
+      incidentService.deleteIncident(incidentToDelete.id);
       auditService.log(currentUser, 'DELETE_INCIDENT', { id: incidentToDelete.id, name: incidentToDelete.eventName });
       showToast("Incident Signal Removed");
     } else if (deleteContext === 'note' && noteToDelete) {
@@ -308,12 +290,12 @@ const App: React.FC = () => {
       if (type === 'asset') {
         const asset = assets.find(a => a.id === targetId);
         if (asset) {
-          await assetService.saveAsset({ ...asset, notes: asset.notes.filter(n => n.id !== noteId) });
+          assetService.saveAsset({ ...asset, notes: asset.notes.filter(n => n.id !== noteId) });
         }
       } else {
         const incident = incidents.find(i => i.id === targetId);
         if (incident) {
-          await incidentService.saveIncident({ ...incident, notes: incident.notes.filter(n => n.id !== noteId) });
+          incidentService.saveIncident({ ...incident, notes: incident.notes.filter(n => n.id !== noteId) });
         }
       }
       showToast("Note Permanently Deleted");
@@ -323,8 +305,8 @@ const App: React.FC = () => {
     setNoteToDelete(null);
   };
 
-  const handleExportAssets = async () => {
-    const data = await assetService.exportAssets();
+  const handleExportAssets = () => {
+    const data = assetService.exportAssets();
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -335,8 +317,8 @@ const App: React.FC = () => {
     showToast("Infrastructure Data Exported");
   };
 
-  const handleExportIncidents = async () => {
-    const data = await incidentService.exportIncidents();
+  const handleExportIncidents = () => {
+    const data = incidentService.exportIncidents();
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -379,11 +361,11 @@ const App: React.FC = () => {
                   <button onClick={() => assetInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
                     <Upload className="w-3.5 h-3.5" /> {t('import')}
                   </button>
-                  <input type="file" ref={assetInputRef} className="hidden" accept=".json" onChange={async (e) => {
+                  <input type="file" ref={assetInputRef} className="hidden" accept=".json" onChange={(e) => {
                     const reader = new FileReader();
-                    reader.onload = async (ev) => { 
+                    reader.onload = (ev) => { 
                       try {
-                        await assetService.importAssets(JSON.parse(ev.target?.result as string)); 
+                        assetService.importAssets(JSON.parse(ev.target?.result as string)); 
                         loadData(); 
                         showToast("Asset Catalog Imported");
                       } catch(err) {
@@ -440,11 +422,11 @@ const App: React.FC = () => {
                   <button onClick={() => incidentInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
                     <Upload className="w-3.5 h-3.5" /> {t('import')}
                   </button>
-                  <input type="file" ref={incidentInputRef} className="hidden" accept=".json" onChange={async (e) => {
+                  <input type="file" ref={incidentInputRef} className="hidden" accept=".json" onChange={(e) => {
                     const reader = new FileReader();
-                    reader.onload = async (ev) => { 
+                    reader.onload = (ev) => { 
                       try {
-                        await incidentService.importIncidents(JSON.parse(ev.target?.result as string)); 
+                        incidentService.importIncidents(JSON.parse(ev.target?.result as string)); 
                         loadData(); 
                         showToast("Incidents Repository Updated");
                       } catch(err) {
@@ -502,7 +484,7 @@ const App: React.FC = () => {
     <Layout activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
       <NotificationCenter isOpen={isNotifCenterOpen} onClose={() => setIsNotifCenterOpen(false)} currentUser={currentUser} notifications={notifications} requests={requests} onUpdate={loadData} onOpenRequest={setSelectedRequest} language={settings.language} />
       {renderActiveTab()}
-      {selectedRequest && <RequestDetailModal request={selectedRequest} isOpen={true} onClose={() => setSelectedRequest(null)} canApprove={permissions.canApproveRequests} onResolve={async (st) => { await requestService.resolveRequest(selectedRequest.id, currentUser, st); auditService.log(currentUser, 'REQUEST_RESOLVED', { id: selectedRequest.id, name: selectedRequest.action }, { status: st }); loadData(); setSelectedRequest(null); showToast(`Request ${st}`); }} language={settings.language} />}
+      {selectedRequest && <RequestDetailModal request={selectedRequest} isOpen={true} onClose={() => setSelectedRequest(null)} canApprove={permissions.canApproveRequests} onResolve={(st) => { requestService.resolveRequest(selectedRequest.id, currentUser, st); auditService.log(currentUser, 'REQUEST_RESOLVED', { id: selectedRequest.id, name: selectedRequest.action }, { status: st }); loadData(); setSelectedRequest(null); showToast(`Request ${st}`); }} language={settings.language} />}
       {selectedAsset && <AssetModal asset={selectedAsset} isOpen={true} permissions={permissions} currentUser={currentUser} onClose={() => setSelectedAsset(null)} onEdit={a => { setEditingAsset(a); setIsAssetFormOpen(true); }} onDelete={() => { setAssetToDelete(selectedAsset); setDeleteContext('asset'); setIsDeleteModalOpen(true); }} onAddNote={() => { setNoteTarget({ id: selectedAsset.id, type: 'asset', data: selectedAsset }); setEditingNote(null); setIsNoteFormOpen(true); }} onEditNote={(note) => { setNoteTarget({ id: selectedAsset.id, type: 'asset', data: selectedAsset }); setEditingNote(note); setIsNoteFormOpen(true); }} onDeleteNote={(noteId) => handleDeleteNote(selectedAsset.id, 'asset', noteId)} language={settings.language} />}
       {isAssetFormOpen && <AssetForm asset={editingAsset} onSave={handleSaveAsset} onCancel={() => setIsAssetFormOpen(false)} language={settings.language} />}
       {selectedIncident && <IncidentModal incident={selectedIncident} isOpen={true} permissions={permissions} currentUser={currentUser} onClose={() => setSelectedIncident(null)} onEdit={i => { setEditingIncident(i); setIsIncidentFormOpen(true); }} onDelete={() => { setIncidentToDelete(selectedIncident); setDeleteContext('incident'); setIsDeleteModalOpen(true); }} onAddNote={() => { setNoteTarget({ id: selectedIncident.id, type: 'incident', data: selectedIncident }); setEditingNote(null); setIsNoteFormOpen(true); }} onEditNote={(note) => { setNoteTarget({ id: selectedIncident.id, type: 'incident', data: selectedIncident }); setEditingNote(note); setIsNoteFormOpen(true); }} onDeleteNote={(noteId) => handleDeleteNote(selectedIncident.id, 'incident', noteId)} language={settings.language} />}

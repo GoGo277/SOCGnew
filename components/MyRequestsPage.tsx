@@ -29,7 +29,7 @@ const MyRequestsPage: React.FC<MyRequestsPageProps> = ({ currentUser, requests, 
     .filter(r => r.action.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const actionKey = `${formData.actionType}_${formData.type}` as RequestAction;
     let parsedPayload = {};
@@ -39,7 +39,7 @@ const MyRequestsPage: React.FC<MyRequestsPageProps> = ({ currentUser, requests, 
       parsedPayload = { placeholder: formData.payload };
     }
 
-    await requestService.createRequest(currentUser, actionKey, parsedPayload, formData.reason);
+    requestService.createRequest(currentUser, actionKey, parsedPayload, formData.reason);
     setIsFormOpen(false);
     setFormData({ type: 'ASSET', actionType: 'ADD', reason: '', payload: '' });
     onRefresh();
