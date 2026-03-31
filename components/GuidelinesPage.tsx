@@ -204,8 +204,8 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
                )}
             </div>
             <div className="p-6 border-t border-zinc-800 bg-zinc-950/80 flex justify-end gap-3">
-               <button onClick={() => setIsEditing(false)} className="px-6 py-2.5 text-zinc-500 hover:text-white text-xs font-black uppercase tracking-widest">{t('discard')}</button>
-               <button onClick={handleSave} className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow-xl uppercase tracking-widest active:scale-95 transition-all"><Save className="w-4 h-4" /> {t('commit')}</button>
+               <button onClick={() => setIsEditing(false)} className="px-6 py-2.5 text-zinc-500 hover:text-white text-xs font-black uppercase tracking-widest transition-colors">{t('discard')}</button>
+               <button onClick={handleSave} className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 uppercase tracking-widest active:scale-95 transition-all"><Save className="w-4 h-4" /> {t('commit')}</button>
             </div>
           </div>
         ) : activeGuideline ? (

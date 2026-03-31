@@ -39,13 +39,13 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({ isOpe
         <div className="grid grid-cols-2 border-t border-zinc-800">
           <button
             onClick={onClose}
-            className="p-4 text-sm font-bold text-zinc-400 hover:bg-zinc-800 transition-colors border-r border-zinc-800 active:bg-zinc-700"
+            className="p-4 text-sm font-bold text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800 transition-colors border-r border-zinc-800 active:bg-zinc-700 active:scale-95"
           >
             {t('cancel')}
           </button>
           <button
             onClick={onConfirm}
-            className="p-4 text-sm font-bold text-red-500 hover:bg-red-500/10 transition-colors active:bg-red-500/20"
+            className="p-4 text-sm font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors active:bg-red-500/20 active:scale-95"
           >
             {t('confirm')}
           </button>

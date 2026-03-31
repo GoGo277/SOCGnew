@@ -184,7 +184,7 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
           {(currentUser.role === 'Admin' || currentUser.role === 'L2') && !isFormOpen && (
             <button 
               onClick={() => setIsFormOpen(true)}
-              className="flex items-center gap-3 px-8 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-orange-600/20 active:scale-95 transition-all shrink-0"
+              className="flex items-center gap-3 px-8 py-3 bg-orange-600 hover:bg-orange-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-orange-600/20 hover:shadow-orange-500/40 active:scale-95 transition-all shrink-0"
             >
               <Plus className="w-5 h-5" /> {t('broadcast_alert')}
             </button>
@@ -256,7 +256,7 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
              <div className="flex justify-end pt-4">
                 <button 
                   onClick={handleSave}
-                  className="flex items-center gap-3 px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all"
+                  className="flex items-center gap-3 px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all"
                 >
                   <Save className="w-5 h-5" /> {t('commit')}
                 </button>
@@ -294,8 +294,8 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
                      <div className="flex gap-2">
                         {(currentUser.role === 'Admin' || ann.authorId === currentUser.id) && (
                           <>
-                             <button onClick={() => handleEdit(ann)} className="p-3 bg-black/10 hover:bg-white/10 rounded-2xl transition-all" title={t('edit')}><Edit3 className="w-4 h-4" /></button>
-                             <button onClick={() => openDeleteModal(ann)} className="p-3 bg-black/10 hover:bg-red-500/10 rounded-2xl transition-all text-red-400" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
+                             <button onClick={() => handleEdit(ann)} className="p-3 bg-black/10 hover:bg-white/10 rounded-2xl transition-all active:scale-90" title={t('edit')}><Edit3 className="w-4 h-4" /></button>
+                             <button onClick={() => openDeleteModal(ann)} className="p-3 bg-black/10 hover:bg-red-500/10 rounded-2xl transition-all text-red-400 active:scale-90" title={t('delete')}><Trash2 className="w-4 h-4" /></button>
                           </>
                         )}
                      </div>

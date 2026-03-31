@@ -127,7 +127,7 @@ const RequestDetailModal: React.FC<RequestDetailModalProps> = ({ request, isOpen
               </button>
               <button 
                 onClick={() => onResolve?.('APPROVED')}
-                className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-xl shadow-blue-600/20 active:scale-95 transition-all uppercase"
+                className="flex items-center gap-2 px-8 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all uppercase"
               >
                 <Check className="w-4 h-4" /> {t('authorize')}
               </button>
@@ -135,7 +135,7 @@ const RequestDetailModal: React.FC<RequestDetailModalProps> = ({ request, isOpen
           </div>
         ) : (
           <div className="p-6 border-t border-zinc-800 bg-zinc-950/80 flex items-center justify-center">
-            <button onClick={onClose} className="px-12 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition-all uppercase tracking-widest shadow-lg active:scale-95">
+            <button onClick={onClose} className="px-12 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition-all uppercase tracking-widest shadow-lg hover:shadow-xl active:scale-95">
                 {t('close_signal')}
             </button>
           </div>

@@ -1,5 +1,6 @@
 
 import { User } from '../types';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type AuditAction = 
   | 'LOGIN' | 'LOGOUT' 
@@ -29,7 +30,7 @@ export const auditService = {
     return data ? JSON.parse(data) : [];
   },
 
-  log: (user: User, action: AuditAction, target?: { id: string, name: string }, metadata?: any): void => {
+  log: async (user: User, action: AuditAction, target?: { id: string, name: string }, metadata?: any): Promise<void> => {
     const logs = auditService.getLogs();
     const newLog: AuditLog = {
       id: crypto.randomUUID(),
@@ -44,10 +45,27 @@ export const auditService = {
     // Keep only last 500 logs to prevent storage bloat
     const updatedLogs = [newLog, ...logs].slice(0, 500);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedLogs));
+
+    // Fire and forget to Supabase
+    if (isSupabaseConfigured) {
+      supabase.from('audit_logs').insert({
+        id: newLog.id,
+        user_id: newLog.userId,
+        username: newLog.username,
+        action: newLog.action,
+        target_id: newLog.targetId,
+        target_name: newLog.targetName,
+        metadata: newLog.metadata,
+        created_at: newLog.timestamp
+      }).then(({ error }) => {
+        if (error) console.error('Error syncing audit log to Supabase:', error);
+      }).catch(err => {
+        console.error('Network error syncing audit log to Supabase:', err);
+      });
+    }
   },
 
-  getPopularityStats: () => {
-    const logs = auditService.getLogs();
+  getPopularityStats: (logs: AuditLog[]) => {
     const assetViews: Record<string, { name: string, count: number }> = {};
     const incidentViews: Record<string, { name: string, count: number }> = {};
 

@@ -136,7 +136,7 @@ const TasksPage: React.FC<TasksPageProps> = ({ currentUser, permissions, languag
         {permissions.canManageTasks && (
           <button 
             onClick={() => { setEditingTask(null); setIsFormOpen(true); }}
-            className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all shrink-0"
+            className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all shrink-0"
           >
             <Plus className="w-5 h-5" /> {t('deploy_task')}
           </button>
@@ -201,8 +201,8 @@ const TasksPage: React.FC<TasksPageProps> = ({ currentUser, permissions, languag
                 <div className="flex gap-1">
                    {canEditThis && (
                      <>
-                        <button onClick={() => handleEdit(task)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all"><Edit3 className="w-4 h-4" /></button>
-                        <button onClick={() => openDeleteModal(task)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleEdit(task)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all active:scale-90"><Edit3 className="w-4 h-4" /></button>
+                        <button onClick={() => openDeleteModal(task)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button>
                      </>
                    )}
                 </div>
@@ -324,7 +324,7 @@ const TasksPage: React.FC<TasksPageProps> = ({ currentUser, permissions, languag
                  <div className="p-8 border-t border-zinc-800 flex justify-end bg-zinc-950/30">
                     <button 
                       type="submit"
-                      className="flex items-center gap-3 px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"
+                      className="flex items-center gap-3 px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all"
                     >
                       <Save className="w-4 h-4" /> {t('commit')}
                     </button>

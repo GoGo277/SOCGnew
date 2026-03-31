@@ -76,7 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [auditLogs]);
 
   // Popularity Matrix
-  const popularity = useMemo(() => auditService.getPopularityStats(), [auditLogs]);
+  const popularity = useMemo(() => auditService.getPopularityStats(auditLogs), [auditLogs]);
 
   // Comprehensive Activity Stream
   const activityStream = useMemo(() => {
@@ -248,8 +248,8 @@ const Dashboard: React.FC<DashboardProps> = ({
                  <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Database className="w-4 h-4 text-blue-500" /> {t('infrastructure_matrix')}
                  </h5>
-                 <div className="h-48 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                 <div className="h-48 w-full min-h-[200px]">
+                    <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                        <BarChart data={assetDistribution}>
                           <XAxis dataKey="name" hide />
                           <Tooltip 

@@ -52,7 +52,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
               <div className="w-40 h-40 rounded-[2.5rem] bg-zinc-900 border-4 border-[#09090b] shadow-2xl flex items-center justify-center overflow-hidden">
                 {profilePic ? <img src={profilePic} className="w-full h-full object-cover" /> : <UserIcon className="w-16 h-16 text-zinc-700" />}
               </div>
-              <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 right-2 p-3 bg-blue-600 text-white rounded-2xl"><Camera className="w-5 h-5" /></button>
+              <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 right-2 p-3 bg-blue-600 text-white rounded-2xl shadow-lg hover:shadow-xl active:scale-90 transition-all"><Camera className="w-5 h-5" /></button>
               <input type="file" ref={fileInputRef} onChange={handlePicUpload} accept="image/*" className="hidden" />
             </div>
             <div className="flex-1 space-y-2">
@@ -67,9 +67,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
             <div className="md:col-span-2 space-y-8">
               <div className="space-y-3">
                 <label className="flex items-center gap-2 text-[10px] font-black text-zinc-500 uppercase tracking-widest"><Info className="w-3.5 h-3.5" /> {t('professional_bio')}</label>
-                <textarea value={bio} onChange={e => setBio(e.target.value)} rows={6} className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-sm text-zinc-300 outline-none transition-all" />
+                <textarea value={bio} onChange={e => setBio(e.target.value)} rows={6} className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-sm text-zinc-300 outline-none transition-all focus:border-blue-500/50" />
               </div>
-              <button onClick={handleSave} disabled={loading} className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl transition-all">
+              <button onClick={handleSave} disabled={loading} className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all">
                 {loading ? '...' : <Save className="w-4 h-4" />} {t('save_identity')}
               </button>
             </div>

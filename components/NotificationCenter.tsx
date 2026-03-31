@@ -64,12 +64,12 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
           {unreadCount > 0 && (
             <button 
               onClick={() => { requestService.markAllAsRead(currentUser.id); onUpdate(); }}
-              className="text-[9px] font-black text-zinc-500 hover:text-white uppercase tracking-widest px-2 py-1 hover:bg-white/5 rounded-md transition-all"
+              className="text-[9px] font-black text-zinc-500 hover:text-white uppercase tracking-widest px-2 py-1 hover:bg-white/5 rounded-md transition-all active:scale-95"
             >
               {t('clear_buffer')}
             </button>
           )}
-          <button onClick={onClose} className="p-2 hover:bg-red-500/10 rounded-full group transition-all">
+          <button onClick={onClose} className="p-2 hover:bg-red-500/10 rounded-full group transition-all active:scale-90">
             <X className="w-4 h-4 text-zinc-500 group-hover:text-red-500" />
           </button>
         </div>

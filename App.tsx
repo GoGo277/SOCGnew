@@ -10,6 +10,7 @@ import { announcementService } from './services/announcementService';
 import { guidelineService } from './services/guidelineService';
 import { chatService } from './services/chatService';
 import { auditService, AuditLog } from './services/auditService';
+import { supabaseService } from './services/supabaseService';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import AssetModal from './components/AssetModal';
@@ -102,7 +103,7 @@ const App: React.FC = () => {
 
   const showToast = (message: string) => setToast({ message, isOpen: true });
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     const session = settingsService.getActiveSession();
     if (!session) {
       setCurrentUser(null);
@@ -110,13 +111,23 @@ const App: React.FC = () => {
     }
     try {
       setCurrentUser(session);
-      setAssets([...assetService.getAssets()]);
-      setIncidents([...incidentService.getIncidents()]);
+      
+      // Load async data from Supabase
+      const [supabaseAssets, supabaseIncidents, supabaseAuditLogs] = await Promise.all([
+        supabaseService.getAssets(),
+        supabaseService.getIncidents(),
+        supabaseService.getAuditLogs()
+      ]);
+      
+      setAssets(supabaseAssets.length > 0 ? supabaseAssets : [...assetService.getAssets()]);
+      setIncidents(supabaseIncidents.length > 0 ? supabaseIncidents : [...incidentService.getIncidents()]);
+      setAuditLogs(supabaseAuditLogs.length > 0 ? supabaseAuditLogs : [...auditService.getLogs()]);
+      
+      // Load sync data from local storage
       setTasks([...taskService.getTasks()]);
       setRequests([...requestService.getRequests()]);
       setAnnouncements([...announcementService.getAnnouncements()]);
       setGuidelines([...guidelineService.getGuidelines(session.role)]);
-      setAuditLogs([...auditService.getLogs()]);
       setUsers([...settingsService.getUsers()]);
       setSettings(settingsService.getSettings());
       setNotifications(requestService.getNotifications(session.id));
@@ -212,35 +223,39 @@ const App: React.FC = () => {
 
   const permissions = settings.rolePermissions[currentUser.role];
 
-  const handleSaveAsset = (assetData: any) => {
+  const handleSaveAsset = async (assetData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateAsset || !permissions.canEditAsset)) {
       requestService.createRequest(currentUser, assetData.id ? 'EDIT_ASSET' : 'ADD_ASSET', assetData, 'Tactical Submission');
       auditService.log(currentUser, 'REQUEST_CREATED', { id: '', name: assetData.name }, { action: assetData.id ? 'EDIT_ASSET' : 'ADD_ASSET' });
       showToast("Protocol Request Logged");
     } else {
       const saved = assetService.saveAsset(assetData);
-      auditService.log(currentUser, assetData.id ? 'EDIT_ASSET' : 'CREATE_ASSET', { id: saved.id, name: saved.name });
+      const supabaseSaved = await supabaseService.saveAsset(saved);
+      const finalSaved = supabaseSaved || saved;
+      auditService.log(currentUser, assetData.id ? 'EDIT_ASSET' : 'CREATE_ASSET', { id: finalSaved.id, name: finalSaved.name });
       showToast("Asset Signal Updated");
     }
-    loadData();
+    await loadData();
     setIsAssetFormOpen(false);
   };
 
-  const handleSaveIncident = (incidentData: any) => {
+  const handleSaveIncident = async (incidentData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateIncident || !permissions.canEditIncident)) {
       requestService.createRequest(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'ADD_INCIDENT', incidentData, 'Tactical Submission');
       auditService.log(currentUser, 'REQUEST_CREATED', { id: '', name: incidentData.eventName }, { action: incidentData.id ? 'EDIT_INCIDENT' : 'ADD_INCIDENT' });
       showToast("Protocol Request Logged");
     } else {
       const saved = incidentService.saveIncident(incidentData);
-      auditService.log(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'CREATE_INCIDENT', { id: saved.id, name: saved.eventName });
+      const supabaseSaved = await supabaseService.saveIncident(saved);
+      const finalSaved = supabaseSaved || saved;
+      auditService.log(currentUser, incidentData.id ? 'EDIT_INCIDENT' : 'CREATE_INCIDENT', { id: finalSaved.id, name: finalSaved.eventName });
       showToast("Incident Record Committed");
     }
-    loadData();
+    await loadData();
     setIsIncidentFormOpen(false);
   };
 
-  const handleSaveNote = (note: Note) => {
+  const handleSaveNote = async (note: Note) => {
     if (!noteTarget) return;
 
     if (noteTarget.type === 'asset') {
@@ -250,7 +265,9 @@ const App: React.FC = () => {
         const updatedNotes = [...target.notes];
         if (existingNoteIdx !== -1) updatedNotes[existingNoteIdx] = note;
         else updatedNotes.push(note);
-        assetService.saveAsset({ ...target, notes: updatedNotes });
+        const updatedAsset = { ...target, notes: updatedNotes };
+        assetService.saveAsset(updatedAsset);
+        await supabaseService.saveAsset(updatedAsset);
       }
     } else {
       const target = incidents.find(i => i.id === noteTarget.id);
@@ -259,12 +276,14 @@ const App: React.FC = () => {
         const updatedNotes = [...target.notes];
         if (existingNoteIdx !== -1) updatedNotes[existingNoteIdx] = note;
         else updatedNotes.push(note);
-        incidentService.saveIncident({ ...target, notes: updatedNotes });
+        const updatedIncident = { ...target, notes: updatedNotes };
+        incidentService.saveIncident(updatedIncident);
+        await supabaseService.saveIncident(updatedIncident);
       }
     }
     
     showToast(editingNote ? "Note Revision Committed" : "Security Note Logged");
-    loadData();
+    await loadData();
     setIsNoteFormOpen(false);
     setNoteTarget(null);
     setEditingNote(null);
@@ -276,13 +295,15 @@ const App: React.FC = () => {
     setIsDeleteModalOpen(true);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (deleteContext === 'asset' && assetToDelete) {
       assetService.deleteAsset(assetToDelete.id);
+      await supabaseService.deleteAsset(assetToDelete.id);
       auditService.log(currentUser, 'DELETE_ASSET', { id: assetToDelete.id, name: assetToDelete.name });
       showToast("Asset Record Purged");
     } else if (deleteContext === 'incident' && incidentToDelete) {
       incidentService.deleteIncident(incidentToDelete.id);
+      await supabaseService.deleteIncident(incidentToDelete.id);
       auditService.log(currentUser, 'DELETE_INCIDENT', { id: incidentToDelete.id, name: incidentToDelete.eventName });
       showToast("Incident Signal Removed");
     } else if (deleteContext === 'note' && noteToDelete) {
@@ -290,17 +311,21 @@ const App: React.FC = () => {
       if (type === 'asset') {
         const asset = assets.find(a => a.id === targetId);
         if (asset) {
-          assetService.saveAsset({ ...asset, notes: asset.notes.filter(n => n.id !== noteId) });
+          const updatedAsset = { ...asset, notes: asset.notes.filter(n => n.id !== noteId) };
+          assetService.saveAsset(updatedAsset);
+          await supabaseService.saveAsset(updatedAsset);
         }
       } else {
         const incident = incidents.find(i => i.id === targetId);
         if (incident) {
-          incidentService.saveIncident({ ...incident, notes: incident.notes.filter(n => n.id !== noteId) });
+          const updatedIncident = { ...incident, notes: incident.notes.filter(n => n.id !== noteId) };
+          incidentService.saveIncident(updatedIncident);
+          await supabaseService.saveIncident(updatedIncident);
         }
       }
       showToast("Note Permanently Deleted");
     }
-    loadData();
+    await loadData();
     setIsDeleteModalOpen(false);
     setNoteToDelete(null);
   };
@@ -355,10 +380,10 @@ const App: React.FC = () => {
             <div className="flex gap-3">
               {permissions.canImportExport && (
                 <>
-                  <button onClick={handleExportAssets} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
+                  <button onClick={handleExportAssets} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 hover:border-zinc-600 active:scale-95 transition-all flex items-center gap-2 shadow-lg hover:shadow-xl">
                     <Download className="w-3.5 h-3.5" /> {t('export')}
                   </button>
-                  <button onClick={() => assetInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
+                  <button onClick={() => assetInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 hover:border-zinc-600 active:scale-95 transition-all flex items-center gap-2 shadow-lg hover:shadow-xl">
                     <Upload className="w-3.5 h-3.5" /> {t('import')}
                   </button>
                   <input type="file" ref={assetInputRef} className="hidden" accept=".json" onChange={(e) => {
@@ -377,7 +402,7 @@ const App: React.FC = () => {
                 </>
               )}
               {permissions.canCreateAsset && (
-                <button onClick={() => { setEditingAsset(null); setIsAssetFormOpen(true); }} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-all">
+                <button onClick={() => { setEditingAsset(null); setIsAssetFormOpen(true); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 flex items-center gap-2 active:scale-95 transition-all">
                   <Plus className="w-4 h-4" /> {t('add_asset')}
                 </button>
               )}
@@ -399,8 +424,8 @@ const App: React.FC = () => {
                     <td className="p-5"><div className="flex items-center gap-3"><div className={`p-2 bg-zinc-800 rounded-lg ${ASSET_TYPE_COLORS[asset.type]}`}>{ASSET_TYPE_ICONS[asset.type]}</div><div><p className="font-bold text-sm text-zinc-200">{asset.name}</p><p className="text-[10px] text-zinc-500 font-black uppercase tracking-tighter">{asset.type}</p></div></div></td>
                     <td className="p-5 font-mono text-sm text-blue-400/80">{asset.ipv4}</td>
                     <td className="p-5 text-right"><div className="flex justify-end gap-1">
-                      {permissions.canEditAsset && <button onClick={(e) => { e.stopPropagation(); setEditingAsset(asset); setIsAssetFormOpen(true); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all"><Edit3 className="w-4 h-4" /></button>}
-                      {permissions.canDeleteAsset && <button onClick={(e) => { e.stopPropagation(); setAssetToDelete(asset); setDeleteContext('asset'); setIsDeleteModalOpen(true); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></button>}
+                      {permissions.canEditAsset && <button onClick={(e) => { e.stopPropagation(); setEditingAsset(asset); setIsAssetFormOpen(true); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all active:scale-90"><Edit3 className="w-4 h-4" /></button>}
+                      {permissions.canDeleteAsset && <button onClick={(e) => { e.stopPropagation(); setAssetToDelete(asset); setDeleteContext('asset'); setIsDeleteModalOpen(true); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button>}
                     </div></td>
                   </tr>
                 ))}
@@ -416,10 +441,10 @@ const App: React.FC = () => {
             <div className="flex gap-3">
               {permissions.canImportExport && (
                 <>
-                  <button onClick={handleExportIncidents} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
+                  <button onClick={handleExportIncidents} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 hover:border-zinc-600 active:scale-95 transition-all flex items-center gap-2 shadow-lg hover:shadow-xl">
                     <Download className="w-3.5 h-3.5" /> {t('export')}
                   </button>
-                  <button onClick={() => incidentInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 active:scale-95 transition-all flex items-center gap-2">
+                  <button onClick={() => incidentInputRef.current?.click()} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold border border-zinc-700 hover:border-zinc-600 active:scale-95 transition-all flex items-center gap-2 shadow-lg hover:shadow-xl">
                     <Upload className="w-3.5 h-3.5" /> {t('import')}
                   </button>
                   <input type="file" ref={incidentInputRef} className="hidden" accept=".json" onChange={(e) => {
@@ -438,7 +463,7 @@ const App: React.FC = () => {
                 </>
               )}
               {permissions.canCreateIncident && (
-                <button onClick={() => { setEditingIncident(null); setIsIncidentFormOpen(true); }} className="px-5 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold shadow-xl flex items-center gap-2 active:scale-95 transition-all">
+                <button onClick={() => { setEditingIncident(null); setIsIncidentFormOpen(true); }} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:shadow-red-500/40 flex items-center gap-2 active:scale-95 transition-all">
                   <Plus className="w-4 h-4" /> {t('report_incident')}
                 </button>
               )}

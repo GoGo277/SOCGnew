@@ -127,7 +127,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
               </h4>
               <button
                 onClick={() => onAddNote(incident)}
-                className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 hover:bg-amber-500/20 transition-all uppercase tracking-widest active:scale-95"
+                className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 hover:bg-amber-500/20 hover:border-amber-500/30 transition-all uppercase tracking-widest active:scale-95 shadow-sm hover:shadow-amber-500/10"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
                 {t('add_note')}
@@ -150,7 +150,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
                       {note.analyst === currentUser.username && (
                         <button
                           onClick={() => onEditNote?.(note)}
-                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-all"
+                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-all active:scale-90"
                           title={t('edit')}
                         >
                           <Edit3 className="w-4 h-4" />
@@ -159,7 +159,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
                       {permissions.canDeleteNotes && (
                         <button
                           onClick={() => onDeleteNote?.(note.id)}
-                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-all"
+                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-all active:scale-90"
                           title={t('delete')}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -207,7 +207,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
             {permissions.canDeleteIncident && (
               <button 
                 onClick={() => onDelete(incident.id)} 
-                className="flex items-center gap-2 px-6 py-3 text-red-500 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest active:scale-95"
+                className="flex items-center gap-2 px-6 py-3 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest active:scale-95"
               >
                 <Trash2 className="w-4 h-4" />
                 {t('remove')}
@@ -216,7 +216,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
             {permissions.canEditIncident && (
               <button 
                 onClick={() => onEdit(incident)} 
-                className="flex items-center gap-3 px-8 py-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl transition-all text-xs font-black uppercase tracking-widest shadow-[0_10px_20px_-10px_rgba(239,68,68,0.5)] active:scale-95"
+                className="flex items-center gap-3 px-8 py-3 bg-red-600 hover:bg-red-500 text-white rounded-2xl transition-all text-xs font-black uppercase tracking-widest shadow-lg shadow-red-600/20 hover:shadow-red-500/40 active:scale-95"
               >
                 <Edit3 className="w-4 h-4" />
                 {t('edit_incident')}

@@ -272,8 +272,8 @@ const IncidentForm: React.FC<IncidentFormProps> = ({ incident, assets, onSave, o
           </div>
 
           <div className="p-6 border-t border-zinc-800 flex items-center justify-end gap-3 bg-zinc-900/50">
-            <button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 text-sm font-medium text-zinc-400">{t('cancel')}</button>
-            <button type="submit" className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-red-600/20 active:scale-95 transition-all">
+            <button type="button" onClick={onCancel} className="px-6 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 hover:text-zinc-300 transition-colors text-sm font-medium text-zinc-400 active:scale-95">{t('cancel')}</button>
+            <button type="submit" className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold flex items-center gap-2 shadow-lg shadow-red-600/20 hover:shadow-red-500/40 active:scale-95 transition-all">
               <Save className="w-4 h-4" />
               {t('confirm')}
             </button>

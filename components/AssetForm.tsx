@@ -173,13 +173,13 @@ const AssetForm: React.FC<AssetFormProps> = ({ asset, onSave, onCancel, language
             <button
               type="button"
               onClick={onCancel}
-              className="px-6 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 transition-colors text-sm font-medium text-zinc-400 active:scale-95"
+              className="px-6 py-2 rounded-lg border border-zinc-700 hover:bg-zinc-800 hover:text-zinc-300 transition-colors text-sm font-medium text-zinc-400 active:scale-95"
             >
               {t('cancel')}
             </button>
             <button
               type="submit"
-              className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95"
+              className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-all text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95"
             >
               <Save className="w-4 h-4" />
               {t('confirm')}

@@ -119,7 +119,7 @@ const MyRequestsPage: React.FC<MyRequestsPageProps> = ({ currentUser, requests, 
                   <td className="p-5 text-right">
                     <button 
                       onClick={() => onViewDetails(req)}
-                      className="p-2 bg-zinc-800 hover:bg-blue-600 hover:text-white rounded-lg transition-all text-zinc-400"
+                      className="p-2 bg-zinc-800 hover:bg-blue-600 hover:text-white rounded-lg transition-all text-zinc-400 shadow-lg hover:shadow-xl active:scale-90"
                     >
                       <Eye className="w-4 h-4" />
                     </button>

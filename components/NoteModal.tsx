@@ -103,14 +103,14 @@ const NoteModal: React.FC<NoteModalProps> = ({ targetName, targetTypeLabel, isOp
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-white uppercase tracking-widest"
+              className="px-4 py-2 text-sm font-bold text-zinc-500 hover:text-white uppercase tracking-widest active:scale-95 transition-all"
             >
               {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={!content.trim()}
-              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 uppercase tracking-widest ${initialNote ? 'bg-blue-600 hover:bg-blue-500' : 'bg-amber-600 hover:bg-amber-500'} text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+              className={`flex items-center gap-2 px-6 py-2 rounded-lg text-sm font-bold transition-all shadow-lg active:scale-95 uppercase tracking-widest ${initialNote ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-600/20 hover:shadow-blue-500/40' : 'bg-amber-600 hover:bg-amber-500 shadow-amber-600/20 hover:shadow-amber-500/40'} text-white disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {initialNote ? <Edit3 className="w-4 h-4" /> : <Send className="w-4 h-4" />}
               {initialNote ? t('update') : t('post_note')}

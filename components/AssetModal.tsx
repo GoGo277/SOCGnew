@@ -115,7 +115,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ asset, isOpen, permissions, cur
               </h4>
               <button
                 onClick={() => onAddNote(asset)}
-                className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 hover:bg-amber-500/20 transition-all uppercase tracking-widest active:scale-95"
+                className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 hover:bg-amber-500/20 hover:border-amber-500/30 transition-all uppercase tracking-widest active:scale-95 shadow-sm hover:shadow-amber-500/10"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
                 {t('add_note')}
@@ -138,7 +138,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ asset, isOpen, permissions, cur
                       {note.analyst === currentUser.username && (
                         <button
                           onClick={() => onEditNote?.(note)}
-                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-all"
+                          className="p-2 hover:bg-blue-500/10 text-blue-400 rounded-lg transition-all active:scale-90"
                           title={t('edit')}
                         >
                           <Edit3 className="w-4 h-4" />
@@ -147,7 +147,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ asset, isOpen, permissions, cur
                       {permissions.canDeleteNotes && (
                         <button
                           onClick={() => onDeleteNote?.(note.id)}
-                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-all"
+                          className="p-2 hover:bg-red-500/10 text-red-400 rounded-lg transition-all active:scale-90"
                           title={t('delete')}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -177,7 +177,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ asset, isOpen, permissions, cur
             {permissions.canDeleteAsset && (
               <button 
                 onClick={() => onDelete(asset.id)}
-                className="flex items-center gap-2 px-6 py-3 text-red-500 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest active:scale-95"
+                className="flex items-center gap-2 px-6 py-3 text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all text-xs font-black uppercase tracking-widest active:scale-95"
               >
                 <Trash2 className="w-4 h-4" />
                 {t('remove')}
@@ -186,7 +186,7 @@ const AssetModal: React.FC<AssetModalProps> = ({ asset, isOpen, permissions, cur
             {permissions.canEditAsset && (
               <button 
                 onClick={() => onEdit(asset)}
-                className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all text-xs font-black uppercase tracking-widest shadow-[0_10px_20px_-10px_rgba(59,130,246,0.5)] active:scale-95"
+                className="flex items-center gap-3 px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl transition-all text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95"
               >
                 <Edit3 className="w-4 h-4" />
                 {t('edit_asset')}
