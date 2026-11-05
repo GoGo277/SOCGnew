@@ -47,7 +47,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
   const pendingRequests = requests.filter(r => r.status === 'PENDING');
 
   return (
-    <div className="absolute top-16 right-8 w-[420px] max-h-[85vh] bg-[#0c0c0e]/95 backdrop-blur-xl border border-zinc-800 rounded-[2rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[100] flex flex-col overflow-hidden animate-in slide-in-from-top-6 duration-300 ring-1 ring-white/5">
+    <div className="absolute top-16 right-8 w-[420px] max-h-[85vh] bg-[var(--app-sidebar)]/95 backdrop-blur-xl border border-zinc-800 rounded-2xl shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8)] z-[100] flex flex-col overflow-hidden animate-in slide-in-from-top-6 duration-300 ring-1 ring-white/5">
       
       <div className="p-6 border-b border-zinc-800/50 bg-gradient-to-b from-zinc-900/50 to-transparent flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 bg-[#09090b]/40">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 bg-[var(--app-bg)]/40">
         
         {currentUser.role === 'Admin' && pendingRequests.length > 0 && (
           <div className="space-y-3">
@@ -114,7 +114,7 @@ const NotificationCenter: React.FC<NotificationCenterProps> = ({
                     </span>
                   </div>
 
-                  <div className="bg-[#050505] p-3 rounded-xl border border-zinc-800/50 flex items-center justify-between group-hover:border-amber-500/20 transition-all">
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50 flex items-center justify-between group-hover:border-amber-500/20 transition-all">
                     <span className="text-[10px] font-mono text-zinc-500 truncate max-w-[200px]">
                       {req.data.name || req.data.eventName || 'SYSTEM_PAYLOAD_ID'}
                     </span>

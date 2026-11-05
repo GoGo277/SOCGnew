@@ -97,7 +97,7 @@ const AdminRequestsPage: React.FC<AdminRequestsPageProps> = ({
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left">
             <thead>

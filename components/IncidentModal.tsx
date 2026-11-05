@@ -37,8 +37,8 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
         onClick={onClose} 
       />
       
-      <div className="relative bg-[#0c0c0e] border-l border-zinc-800 w-full max-w-xl shadow-2xl panel-slide-in flex flex-col h-full ring-1 ring-white/5">
-        <div className="flex items-center justify-between p-6 border-b border-zinc-800 bg-[#09090b]">
+      <div className="relative bg-[var(--app-sidebar)] border-l border-zinc-800 w-full max-w-xl shadow-2xl panel-slide-in flex flex-col h-full ring-1 ring-white/5">
+        <div className="flex items-center justify-between p-6 border-b border-zinc-800 bg-[var(--app-bg)]">
           <div className="flex items-center gap-4">
             <div className={`p-3 rounded-2xl bg-red-500/10 shadow-[0_0_20px_rgba(239,68,68,0.15)]`}>
               <ShieldAlert className="w-6 h-6 text-red-500" />
@@ -135,7 +135,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
             </div>
             <div className="space-y-4">
               {incident.notes && incident.notes.length > 0 ? incident.notes.map((note) => (
-                <div key={note.id} className="bg-zinc-900/30 border border-zinc-800 rounded-[1.5rem] p-5 space-y-3 hover:border-zinc-700 transition-all cursor-default relative overflow-hidden group">
+                <div key={note.id} className="bg-zinc-900/30 border border-zinc-800 rounded-xl p-5 space-y-3 hover:border-zinc-700 transition-all cursor-default relative overflow-hidden group">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center">
@@ -172,7 +172,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
                   </p>
                 </div>
               )) : (
-                <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-[2rem] text-zinc-600 text-xs font-bold uppercase tracking-widest">
+                <div className="text-center py-12 border-2 border-dashed border-zinc-800 rounded-2xl text-zinc-600 text-xs font-bold uppercase tracking-widest">
                   Zero Intelligence Logged
                 </div>
               )}
@@ -196,7 +196,7 @@ const IncidentModal: React.FC<IncidentModalProps> = ({ incident, isOpen, permiss
           </div>
         </div>
 
-        <div className="p-8 border-t border-zinc-800 flex items-center justify-between bg-[#09090b] sticky bottom-0 z-10">
+        <div className="p-8 border-t border-zinc-800 flex items-center justify-between bg-[var(--app-bg)] sticky bottom-0 z-10">
           <div className="flex flex-col gap-1 text-[9px] text-zinc-600 font-mono font-black uppercase tracking-tighter">
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5" />

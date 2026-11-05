@@ -19,7 +19,7 @@ const MfaEnrollPanel: React.FC<{ secret: string; uri: string; busy: boolean; onS
         <li>{t('Enter the 6-digit code shown in the app.')}</li>
       </ol>
       <div className="flex flex-col sm:flex-row items-center gap-4">
-        {qr ? <img src={qr} alt={t('Authenticator QR code')} className="w-40 h-40 rounded-xl bg-white p-1" /> : <div className="w-40 h-40 rounded-xl bg-zinc-800" />}
+        {qr ? <img src={qr} alt={t('Authenticator QR code')} className="w-40 h-40 rounded-xl bg-[#ffffff] p-1" /> : <div className="w-40 h-40 rounded-xl bg-zinc-800" />}
         <div className="flex-1 min-w-0 space-y-2 w-full">
           <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('Setup key')}</p>
           <div className="flex items-center gap-2">

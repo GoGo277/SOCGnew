@@ -1,15 +1,14 @@
-
 import React, { useState, useMemo } from 'react';
-import { 
-  LayoutDashboard, Shield, Database, LogOut, Activity, 
-  Settings, ClipboardList, BookOpen, ChevronLeft, 
-  ChevronRight, Bell, User as UserIcon, ShieldAlert,
-  MessageSquare, Megaphone, UserCircle, CheckSquare,
-  ShieldCheck, RefreshCw, Zap, CalendarDays, FileText, BarChart3, ScrollText, KeyRound, CalendarClock, Menu, X
+import {
+  LayoutDashboard, Shield, Database, LogOut, Activity, Settings, ClipboardList, BookOpen, ChevronsLeft, ChevronsRight,
+  Bell, User as UserIcon, MessageSquare, Megaphone, UserCircle, CheckSquare, ShieldCheck, RefreshCw, CalendarDays,
+  FileText, BarChart3, ScrollText, KeyRound, CalendarClock, Menu, X, Siren, Briefcase, Building2, LayoutTemplate,
+  Sun, Moon, Monitor, Plug,
 } from 'lucide-react';
 import { backendLabel } from '../lib/firebase';
 import { User, AppSettings } from '../types';
-import { getTranslator } from '../translations';
+import { useT } from '../i18n';
+import { ThemePref, getThemePref, setThemePref } from '../lib/theme';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,142 +23,162 @@ interface LayoutProps {
   navCounts?: Record<string, number>;
   onChangePassword?: () => void;
   onSetupMfa?: () => void;
+  headerExtra?: React.ReactNode;
 }
 
-const Layout: React.FC<LayoutProps> = ({ 
-  children, 
-  activeTab, 
-  onTabChange, 
-  currentUser, 
-  settings, 
-  onLogout,
-  totalAlerts,
-  onToggleNotifCenter,
-  isNotifCenterOpen,
-  navCounts = {},
-  onChangePassword,
-  onSetupMfa
+type Group = 'overview' | 'investigation' | 'operations' | 'collaboration' | 'administration';
+const GROUP_LABEL: Record<Group, string> = {
+  overview: 'Overview', investigation: 'Investigation', operations: 'SOC operations', collaboration: 'Collaboration', administration: 'Administration',
+};
+
+const Layout: React.FC<LayoutProps> = ({
+  children, activeTab, onTabChange, currentUser, settings, onLogout, totalAlerts, onToggleNotifCenter, isNotifCenterOpen,
+  navCounts = {}, onChangePassword, onSetupMfa, headerExtra,
 }) => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const t = useT();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [theme, setTheme] = useState<ThemePref>(getThemePref());
   const go = (id: string) => { onTabChange(id); setIsMobileNavOpen(false); };
-  const t = useMemo(() => getTranslator(settings.language), [settings.language]);
   const permissions = settings.rolePermissions[currentUser.role];
+  const isAdmin = currentUser.role === 'Admin';
+  const compact = isCollapsed && !isMobileNavOpen;
 
   const handleRefresh = () => {
     setIsSyncing(true);
-    setTimeout(() => {
-      window.dispatchEvent(new Event('storage'));
-      setIsSyncing(false);
-    }, 600);
+    setTimeout(() => { window.dispatchEvent(new Event('storage')); setIsSyncing(false); }, 600);
   };
 
-  const allNavItems = useMemo(() => ([
-    { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard, color: 'text-blue-400', visible: permissions.visiblePages.dashboard },
-    { id: 'duty', label: t('duty'), icon: CalendarDays, color: 'text-cyan-400', visible: permissions.visiblePages.duty !== false },
-    { id: 'shift-reports', label: t('shift-reports'), icon: FileText, color: 'text-red-400', visible: permissions.visiblePages.shiftReports !== false },
-    { id: 'executive', label: t('executive'), icon: BarChart3, color: 'text-indigo-400', visible: permissions.visiblePages.executive !== false },
-    { id: 'reporting', label: t('Report Center'), icon: CalendarClock, color: 'text-blue-400', visible: permissions.canExportReports !== false },
-    { id: 'assets', label: t('assets'), icon: Database, color: 'text-blue-400', visible: permissions.visiblePages.assets },
-    { id: 'incidents', label: t('incidents'), icon: Activity, color: 'text-red-400', visible: permissions.visiblePages.incidents },
-    { id: 'tasks', label: t('tasks'), icon: CheckSquare, color: 'text-cyan-400', visible: permissions.visiblePages.tasks },
-    { id: 'announcements', label: t('announcements'), icon: Megaphone, color: 'text-orange-400', visible: permissions.visiblePages.announcements },
-    { id: 'messaging', label: t('messaging'), icon: MessageSquare, color: 'text-purple-400', visible: permissions.visiblePages.messaging },
-    { id: 'guidelines', label: t('guidelines'), icon: BookOpen, color: 'text-emerald-400', visible: true },
-    { id: 'admin-requests', label: t('admin_requests'), icon: ShieldCheck, color: 'text-amber-400', visible: currentUser.role === 'Admin' },
-    { id: 'requests', label: t('requests'), icon: ClipboardList, color: 'text-amber-400', visible: currentUser.role !== 'Admin' },
-    { id: 'audit', label: t('audit'), icon: ScrollText, color: 'text-amber-400', visible: currentUser.role === 'Admin' || !!permissions.canViewAuditLog },
-  ]), [t, permissions, currentUser.role]);
-
-  const sortedNavItems = useMemo(() => {
-    return [...allNavItems].sort((a, b) => {
-      const indexA = settings.navOrder.indexOf(a.id);
-      const indexB = settings.navOrder.indexOf(b.id);
-      return (indexA === -1 ? 99 : indexA) - (indexB === -1 ? 99 : indexB);
-    });
-  }, [allNavItems, settings.navOrder]);
-
-  const getPageTitle = () => {
-    switch (activeTab) {
-      case 'dashboard': return t('soc_hub');
-      case 'duty': return t('duty');
-      case 'shift-reports': return t('shift-reports');
-      case 'executive': return t('executive');
-      case 'audit': return t('audit');
-      case 'reporting': return t('Report Center');
-      case 'assets': return t('assets');
-      case 'incidents': return t('incidents');
-      case 'tasks': return t('mission_control');
-      case 'announcements': return t('intel_feed');
-      case 'messaging': return t('messaging');
-      case 'guidelines': return t('sop_intel');
-      case 'requests': return t('command_history');
-      case 'admin-requests': return t('admin_requests');
-      case 'profile': return t('analyst_profile');
-      case 'settings': return t('core_systems');
-      default: return activeTab;
-    }
+  const cycleTheme = () => {
+    const next: ThemePref = theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system';
+    setTheme(next);
+    setThemePref(next);
   };
+  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
+  const themeLabel = theme === 'light' ? t('Light theme') : theme === 'dark' ? t('Dark theme') : t('System theme');
+
+  const items = useMemo(() => ([
+    { id: 'dashboard', group: 'overview', label: t('dashboard'), icon: LayoutDashboard, visible: permissions.visiblePages.dashboard },
+    { id: 'alerts', group: 'investigation', label: t('Alerts'), icon: Siren, visible: permissions.visiblePages.alerts !== false },
+    { id: 'cases', group: 'investigation', label: t('Cases'), icon: Briefcase, visible: permissions.visiblePages.cases !== false },
+    { id: 'incidents', group: 'investigation', label: t('incidents'), icon: Activity, visible: permissions.visiblePages.incidents },
+    { id: 'assets', group: 'investigation', label: t('assets'), icon: Database, visible: permissions.visiblePages.assets },
+    { id: 'duty', group: 'operations', label: t('duty'), icon: CalendarDays, visible: permissions.visiblePages.duty !== false },
+    { id: 'shift-reports', group: 'operations', label: t('shift-reports'), icon: FileText, visible: permissions.visiblePages.shiftReports !== false },
+    { id: 'executive', group: 'operations', label: t('executive'), icon: BarChart3, visible: permissions.visiblePages.executive !== false },
+    { id: 'reporting', group: 'operations', label: t('Report Center'), icon: CalendarClock, visible: permissions.canExportReports !== false },
+    { id: 'tasks', group: 'operations', label: t('tasks'), icon: CheckSquare, visible: permissions.visiblePages.tasks },
+    { id: 'announcements', group: 'collaboration', label: t('announcements'), icon: Megaphone, visible: permissions.visiblePages.announcements },
+    { id: 'messaging', group: 'collaboration', label: t('messaging'), icon: MessageSquare, visible: permissions.visiblePages.messaging },
+    { id: 'guidelines', group: 'collaboration', label: t('guidelines'), icon: BookOpen, visible: true },
+    { id: 'requests', group: 'collaboration', label: t('requests'), icon: ClipboardList, visible: !isAdmin },
+    { id: 'admin-requests', group: 'administration', label: t('admin_requests'), icon: ShieldCheck, visible: isAdmin },
+    { id: 'customers', group: 'administration', label: t('Customers'), icon: Building2, visible: permissions.visiblePages.cases !== false },
+    { id: 'case-templates', group: 'administration', label: t('Case templates'), icon: LayoutTemplate, visible: permissions.visiblePages.cases !== false },
+    { id: 'integrations', group: 'administration', label: t('Integrations'), icon: Plug, visible: isAdmin },
+    { id: 'audit', group: 'administration', label: t('audit'), icon: ScrollText, visible: isAdmin || !!permissions.canViewAuditLog },
+  ] as { id: string; group: Group; label: string; icon: React.ElementType; visible: boolean }[]).filter(i => i.visible), [t, permissions, isAdmin]);
+
+  const grouped = useMemo(() => {
+    const order = (id: string) => { const i = settings.navOrder.indexOf(id); return i === -1 ? 99 : i; };
+    return (Object.keys(GROUP_LABEL) as Group[])
+      .map(g => ({ group: g, items: items.filter(i => i.group === g).sort((a, b) => order(a.id) - order(b.id)) }))
+      .filter(g => g.items.length);
+  }, [items, settings.navOrder]);
+
+  const pageTitle = items.find(i => i.id === activeTab)?.label
+    ?? ({ profile: t('analyst_profile'), settings: t('core_systems') } as Record<string, string>)[activeTab] ?? activeTab;
 
   return (
-    <div className={`flex h-screen bg-[#09090b] text-zinc-100 overflow-hidden ${settings.language === 'zh' ? 'font-sans' : ''}`}>
+    <div className="flex h-screen bg-[var(--app-bg)] text-zinc-100 overflow-hidden">
       {isMobileNavOpen && <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setIsMobileNavOpen(false)} aria-hidden="true" />}
-      <aside aria-label={t('Main navigation')} className={`border-r border-zinc-800 flex-col transition-all duration-300 ease-in-out bg-[#0c0c0e] shrink-0
-        ${isMobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex w-72 shadow-2xl' : 'hidden'} md:relative md:z-30 md:flex ${isCollapsed ? 'md:w-20' : 'md:w-64'}`}>
-        <div className={`h-16 flex items-center ${isCollapsed && !isMobileNavOpen ? 'justify-center' : 'px-6 gap-3'} border-b border-zinc-800/50`}>
-          {settings.logoUrl ? (
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-zinc-800 shrink-0"><img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover" /></div>
-          ) : (
-            <div className="bg-blue-600 p-1.5 rounded-lg shrink-0"><Shield className="w-5 h-5 text-white" /></div>
-          )}
-          {(!isCollapsed || isMobileNavOpen) && <h1 className="font-black text-sm uppercase tracking-widest truncate flex-1">{settings.appName}</h1>}
-          {isMobileNavOpen && <button aria-label={t('Close menu')} onClick={() => setIsMobileNavOpen(false)} className="p-2 text-zinc-400 hover:text-white md:hidden"><X className="w-5 h-5" /></button>}
+      <aside aria-label={t('Main navigation')} className={`border-r border-zinc-800 flex-col transition-[width] duration-200 bg-[var(--app-sidebar)] shrink-0
+        ${isMobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex w-72 shadow-2xl' : 'hidden'} md:relative md:z-30 md:flex ${isCollapsed ? 'md:w-[72px]' : 'md:w-60'}`}>
+        <div className={`h-14 flex items-center gap-3 border-b border-zinc-800 ${compact ? 'justify-center' : 'px-4'}`}>
+          {settings.logoUrl
+            ? <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0"><img src={settings.logoUrl} alt="" className="w-full h-full object-cover" /></div>
+            : <div className="bg-blue-600 p-1.5 rounded-lg shrink-0"><Shield className="w-5 h-5 text-white" /></div>}
+          {!compact && <span className="font-black text-[15px] tracking-tight truncate flex-1">{settings.appName}</span>}
+          {isMobileNavOpen && <button aria-label={t('Close menu')} onClick={() => setIsMobileNavOpen(false)} className="p-2 text-zinc-400 hover:text-zinc-100 md:hidden"><X className="w-5 h-5" /></button>}
         </div>
-        <nav className="flex-1 px-3 py-6 space-y-2 overflow-y-auto custom-scrollbar">
-          {sortedNavItems.filter(item => item.visible).map((item) => {
-            const count = navCounts[item.id] || 0;
-            return (
-              <button key={item.id} onClick={() => go(item.id)} aria-label={item.label} title={isCollapsed ? item.label : ''} aria-current={activeTab === item.id ? 'page' : undefined} className={`w-full flex items-center transition-all duration-200 group rounded-xl relative ${activeTab === item.id ? 'bg-zinc-800/50 text-white border border-white/5' : 'text-zinc-500 hover:bg-zinc-800/30 hover:text-zinc-200'} ${isCollapsed && !isMobileNavOpen ? 'justify-center h-12' : 'px-4 py-3 gap-3'}`}>
-                <div className="relative"><item.icon className={`w-5 h-5 shrink-0 ${activeTab === item.id ? item.color : 'group-hover:text-zinc-300'}`} />{count > 0 && isCollapsed && !isMobileNavOpen && (<span className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-[#0c0c0e]">{count > 9 ? '9+' : count}</span>)}</div>
-                {(!isCollapsed || isMobileNavOpen) && (<><span className="text-sm font-bold tracking-tight flex-1 text-left">{item.label}</span>{count > 0 && (<span className="bg-red-600/20 text-red-500 text-[10px] font-black px-2 py-0.5 rounded-full border border-red-500/20">{count}</span>)}</>)}
-                {isCollapsed && !isMobileNavOpen && activeTab === item.id && (<div className="absolute left-0 w-1 h-6 bg-blue-500 rounded-r-full shadow-[0_0_10px_rgba(59,130,246,0.5)]" />)}
-              </button>
-            );
-          })}
+
+        <nav className="flex-1 px-2 py-3 overflow-y-auto">
+          {grouped.map(({ group, items: gi }) => (
+            <div key={group} className="mb-3">
+              {!compact
+                ? <p className="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-500">{t(GROUP_LABEL[group])}</p>
+                : <div className="mx-3 my-2 border-t border-zinc-800" />}
+              {gi.map(item => {
+                const count = navCounts[item.id] || 0;
+                const active = activeTab === item.id;
+                return (
+                  <button key={item.id} onClick={() => go(item.id)} aria-label={item.label} title={compact ? item.label : ''} aria-current={active ? 'page' : undefined}
+                    className={`w-full flex items-center rounded-lg relative text-[13px] transition-colors ${compact ? 'justify-center h-10' : 'px-3 py-2 gap-3'}
+                      ${active ? 'bg-blue-600/10 text-blue-500 font-bold' : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-100'}`}>
+                    {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r bg-blue-600" aria-hidden="true" />}
+                    <span className="relative">
+                      <item.icon className="w-[18px] h-[18px] shrink-0" />
+                      {count > 0 && compact && <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center">{count > 9 ? '9+' : count}</span>}
+                    </span>
+                    {!compact && <><span className="flex-1 text-left truncate">{item.label}</span>{count > 0 && <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 min-w-[18px] text-center rounded-full">{count}</span>}</>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
-        <button aria-label={isCollapsed ? t('Expand sidebar') : t('Collapse sidebar')} onClick={() => setIsCollapsed(!isCollapsed)} className="hidden md:flex absolute -right-3 top-20 w-6 h-6 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-all z-40">{isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}</button>
+        <button aria-label={isCollapsed ? t('Expand sidebar') : t('Collapse sidebar')} onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden md:flex items-center gap-2 justify-center h-10 border-t border-zinc-800 text-zinc-500 hover:text-zinc-100 text-xs">
+          {isCollapsed ? <ChevronsRight className="w-4 h-4" /> : <><ChevronsLeft className="w-4 h-4" /> {t('Collapse sidebar')}</>}
+        </button>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0 bg-[#09090b]">
-        <header className="h-16 border-b border-zinc-800/50 flex items-center justify-between gap-2 px-3 sm:px-8 bg-[#09090b]/80 backdrop-blur-md z-20 sticky top-0">
-          <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-            <button aria-label={t('Open menu')} onClick={() => setIsMobileNavOpen(true)} className="md:hidden p-2 -ml-1 rounded-xl text-zinc-400 hover:text-white"><Menu className="w-5 h-5" /></button>
-            <h2 className="text-sm sm:text-lg font-black tracking-tight text-white uppercase flex items-center gap-2 truncate"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />{getPageTitle()}</h2>
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-zinc-950 border border-zinc-800 rounded-full">
-               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-               <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{backendLabel}</span>
-            </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="h-14 border-b border-zinc-800 flex items-center justify-between gap-2 px-3 sm:px-6 bg-[var(--app-surface)] z-20 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <button aria-label={t('Open menu')} onClick={() => setIsMobileNavOpen(true)} className="md:hidden p-2 -ml-1 rounded-lg text-zinc-400 hover:text-zinc-100"><Menu className="w-5 h-5" /></button>
+            <h2 className="text-sm sm:text-base font-bold text-zinc-100 truncate">{pageTitle}</h2>
+            <span className="hidden lg:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-zinc-800 text-[10px] text-zinc-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {t(backendLabel)}
+            </span>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <button aria-label={t('Synchronize')} onClick={handleRefresh} className={`p-2.5 rounded-xl border border-zinc-800 text-zinc-500 hover:text-white transition-all active:scale-90 shadow-sm hover:shadow-md ${isSyncing ? 'animate-spin border-blue-500/50 text-blue-400' : ''}`} title="Synchronize State"><RefreshCw className="w-5 h-5" /></button>
-            <button aria-label={t('Notifications')} onClick={onToggleNotifCenter} className={`p-2.5 rounded-xl transition-all relative border active:scale-90 shadow-sm hover:shadow-md ${isNotifCenterOpen ? 'bg-blue-500/10 border-blue-500/50 text-blue-400' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-700'}`}><Bell className="w-5 h-5" />{totalAlerts > 0 && (<span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-600 text-white text-[9px] font-black rounded-full flex items-center justify-center border-2 border-[#09090b] shadow-lg">{totalAlerts}</span>)}</button>
-
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {headerExtra}
+            <button aria-label={themeLabel} title={themeLabel} onClick={cycleTheme} className="p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60"><ThemeIcon className="w-[18px] h-[18px]" /></button>
+            <button aria-label={t('Synchronize')} title={t('Synchronize')} onClick={handleRefresh} className={`p-2 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60 ${isSyncing ? 'animate-spin text-blue-500' : ''}`}><RefreshCw className="w-[18px] h-[18px]" /></button>
+            <button aria-label={t('Notifications')} onClick={onToggleNotifCenter} className={`p-2 rounded-lg relative ${isNotifCenterOpen ? 'bg-blue-600/10 text-blue-500' : 'text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60'}`}>
+              <Bell className="w-[18px] h-[18px]" />
+              {totalAlerts > 0 && <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 bg-red-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">{totalAlerts}</span>}
+            </button>
             <div className="relative">
-              <button onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)} className={`flex items-center gap-3 pl-3 pr-2 py-1.5 rounded-xl border transition-all active:scale-95 shadow-sm hover:shadow-md ${isAccountMenuOpen ? 'bg-zinc-800 border-zinc-600 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700'}`}>
-                <div className="hidden sm:flex flex-col items-end"><span className="text-xs font-black tracking-tight leading-none text-zinc-200">{currentUser.username}</span><span className="text-[8px] font-black uppercase text-zinc-600 tracking-widest">{currentUser.role}</span></div>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] overflow-hidden ${currentUser.role === 'Admin' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}>{currentUser.profilePic ? (<img src={currentUser.profilePic} alt="" className="w-full h-full object-cover" />) : (<UserIcon className="w-4 h-4" />)}</div>
+              <button aria-label={t('Account menu')} onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)} className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-lg hover:bg-zinc-800/60">
+                <span className="hidden sm:flex flex-col items-end leading-tight"><span className="text-xs font-bold text-zinc-200">{currentUser.username}</span><span className="text-[10px] text-zinc-500">{currentUser.role}</span></span>
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center overflow-hidden ${isAdmin ? 'bg-red-600' : 'bg-blue-600'} text-white`}>{currentUser.profilePic ? <img src={currentUser.profilePic} alt="" className="w-full h-full object-cover" /> : <UserIcon className="w-4 h-4" />}</span>
               </button>
-
-              {isAccountMenuOpen && (<><div className="fixed inset-0 z-40" onClick={() => setIsAccountMenuOpen(false)} /><div className="absolute right-0 mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200"><div className="px-3 py-3 border-b border-zinc-800/50 mb-1"><p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">{t('Signed in as')}</p><p className="text-xs font-bold text-zinc-300 truncate">@{currentUser.username.toLowerCase()}</p></div><button onClick={() => { onTabChange('profile'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><UserCircle className="w-4 h-4" /><span className="text-xs font-bold">{t('profile')}</span></button>{currentUser.role === 'Admin' && (<button onClick={() => { onTabChange('settings'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><Settings className="w-4 h-4" /><span className="text-xs font-bold">{t('settings')}</span></button>)}{onChangePassword && (<button onClick={() => { onChangePassword(); setIsAccountMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-400 hover:bg-zinc-800 hover:text-white"><KeyRound className="w-4 h-4" /><span className="text-xs font-bold">{t('Change password')}</span></button>)}{onSetupMfa && (<button onClick={() => { onSetupMfa(); setIsAccountMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-400 hover:bg-zinc-800 hover:text-white"><ShieldCheck className="w-4 h-4" /><span className="text-xs font-bold">{t('Two-step verification')}</span></button>)}<button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"><LogOut className="w-4 h-4" /><span className="text-xs font-bold">{t('logout')}</span></button></div></>)}
+              {isAccountMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsAccountMenuOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-56 bg-[var(--app-surface)] border border-zinc-800 rounded-xl shadow-2xl p-1.5 z-50">
+                    <div className="px-3 py-2 border-b border-zinc-800 mb-1"><p className="text-[10px] text-zinc-500">{t('Signed in as')}</p><p className="text-xs font-bold text-zinc-200 truncate">{currentUser.username}</p></div>
+                    {[
+                      { show: true, icon: UserCircle, label: t('profile'), on: () => onTabChange('profile') },
+                      { show: isAdmin, icon: Settings, label: t('settings'), on: () => onTabChange('settings') },
+                      { show: !!onChangePassword, icon: KeyRound, label: t('Change password'), on: () => onChangePassword?.() },
+                      { show: !!onSetupMfa, icon: ShieldCheck, label: t('Two-step verification'), on: () => onSetupMfa?.() },
+                    ].filter(x => x.show).map(x => (
+                      <button key={x.label} onClick={() => { x.on(); setIsAccountMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100"><x.icon className="w-4 h-4" /><span className="text-xs font-bold">{x.label}</span></button>
+                    ))}
+                    <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-red-500 hover:bg-red-500/10"><LogOut className="w-4 h-4" /><span className="text-xs font-bold">{t('logout')}</span></button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </header>
-
-        <main className="flex-1 overflow-y-auto bg-[#09090b] custom-scrollbar">
-          <div key={activeTab} className="p-4 sm:p-6 lg:p-8 w-full max-w-full page-transition">{children}</div>
+        <main className="flex-1 overflow-y-auto bg-[var(--app-bg)]">
+          <div key={activeTab} className="p-4 sm:p-6 w-full max-w-full page-transition">{children}</div>
         </main>
       </div>
     </div>

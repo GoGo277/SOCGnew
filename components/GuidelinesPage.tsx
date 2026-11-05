@@ -168,7 +168,7 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
         </div>
       </aside>
 
-      <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl relative">
+      <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden flex flex-col shadow-2xl relative">
         {isEditing ? (
           <div className="flex flex-col h-full">
             <div className="p-3 bg-zinc-950 border-b border-zinc-800 flex flex-wrap items-center gap-1 shrink-0">
@@ -232,7 +232,7 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-center p-12 space-y-6">
-            <div className="w-24 h-24 bg-zinc-800/50 rounded-[2rem] flex items-center justify-center border border-zinc-700"><Book className="w-10 h-10 text-zinc-700" /></div>
+            <div className="w-24 h-24 bg-zinc-800/50 rounded-2xl flex items-center justify-center border border-zinc-700"><Book className="w-10 h-10 text-zinc-700" /></div>
             <h3 className="text-2xl font-black text-zinc-400 tracking-tight">{t('sop_intel_center')}</h3>
           </div>
         )}

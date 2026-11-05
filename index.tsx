@@ -4,6 +4,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import DialogHost from './components/DialogHost';
 import './index.css';
+import { applyTheme } from './lib/theme';
+
+applyTheme();
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

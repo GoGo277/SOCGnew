@@ -45,12 +45,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
 
   return (
     <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] overflow-hidden shadow-2xl">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
         <div className="h-48 bg-gradient-to-r from-blue-600/20 via-zinc-800 to-red-600/20 relative" />
         <div className="px-12 pb-12 relative -mt-20">
           <div className="flex flex-col md:flex-row gap-8 items-center">
             <div className="relative group">
-              <div className="w-40 h-40 rounded-[2.5rem] bg-zinc-900 border-4 border-[#09090b] shadow-2xl flex items-center justify-center overflow-hidden">
+              <div className="w-40 h-40 rounded-2xl bg-zinc-900 border-4 border-[var(--app-bg)] shadow-2xl flex items-center justify-center overflow-hidden">
                 {profilePic ? <img src={profilePic} className="w-full h-full object-cover" /> : <UserIcon className="w-16 h-16 text-zinc-700" />}
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 right-2 p-3 bg-blue-600 text-white rounded-2xl shadow-lg hover:shadow-xl active:scale-90 transition-all"><Camera className="w-5 h-5" /></button>
@@ -74,7 +74,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
                 {loading ? '...' : <Save className="w-4 h-4" />} {t('save_identity')}
               </button>
             </div>
-            <div className="space-y-6 bg-zinc-950/50 p-6 rounded-[2rem] border border-zinc-800/50">
+            <div className="space-y-6 bg-zinc-950/50 p-6 rounded-2xl border border-zinc-800/50">
               <h4 className="text-[10px] font-black text-zinc-500 uppercase mb-4">Metadata</h4>
               <div className="space-y-4">
                 <div className="flex items-center gap-3">

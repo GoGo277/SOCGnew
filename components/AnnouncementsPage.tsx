@@ -193,7 +193,7 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
       </div>
 
       {isFormOpen && (
-        <div className="bg-zinc-900 border-2 border-orange-500/30 rounded-[2.5rem] overflow-hidden shadow-2xl animate-in zoom-in duration-300">
+        <div className="bg-zinc-900 border-2 border-orange-500/30 rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in duration-300">
           <div className="p-8 border-b border-zinc-800 bg-zinc-950/30 flex justify-between items-center">
              <h4 className="text-lg font-black text-white uppercase tracking-widest flex items-center gap-3">
                <ShieldAlert className="w-6 h-6 text-orange-500" /> {editingId ? t('update') : t('drafting_alert')}
@@ -271,11 +271,11 @@ const AnnouncementsPage: React.FC<AnnouncementsPageProps> = ({ currentUser, lang
           return (
             <div 
               key={ann.id} 
-              className={`group p-8 rounded-[2.5rem] border transition-all hover:translate-x-2 relative overflow-hidden ${getSeverityStyle(ann.severity)}`}
+              className={`group p-8 rounded-2xl border transition-all hover:translate-x-2 relative overflow-hidden ${getSeverityStyle(ann.severity)}`}
             >
               <div className="flex flex-col md:flex-row gap-8">
                 <div className="shrink-0">
-                  <div className="w-16 h-16 rounded-[1.5rem] bg-black/20 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform text-white">
+                  <div className="w-16 h-16 rounded-xl bg-black/20 flex items-center justify-center border border-white/5 group-hover:scale-110 transition-transform text-white">
                     {ann.severity === 'Critical' ? <ShieldAlert className="w-8 h-8 animate-pulse" /> : 
                      ann.severity === 'High' ? <AlertTriangle className="w-8 h-8" /> : 
                      ann.severity === 'Medium' ? <Info className="w-8 h-8" /> : 

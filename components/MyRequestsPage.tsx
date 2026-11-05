@@ -134,7 +134,7 @@ const MyRequestsPage: React.FC<MyRequestsPageProps> = ({ currentUser, requests, 
       {isFormOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsFormOpen(false)} />
-           <div className="relative bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-in zoom-in duration-200 overflow-hidden">
+           <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl animate-in zoom-in duration-200 overflow-hidden">
               <form onSubmit={handleSubmit}>
                  <div className="p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-950/30">
                     <h4 className="text-lg font-black text-white uppercase tracking-widest">{t('new_request')}</h4>

@@ -162,7 +162,7 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-[2rem] p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute inset-y-0 left-0 w-1.5" style={{ background: shift.hex }} />
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-[240px]">

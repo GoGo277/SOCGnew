@@ -132,7 +132,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
       {/* Top Insights Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2rem] relative overflow-hidden group hover:border-blue-500/50 transition-all shadow-2xl">
+        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl relative overflow-hidden group hover:border-blue-500/50 transition-all shadow-2xl">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <TrendingUp className="w-16 h-16 text-blue-500" />
           </div>
@@ -148,7 +148,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2rem] relative overflow-hidden group hover:border-red-500/50 transition-all shadow-2xl">
+        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl relative overflow-hidden group hover:border-red-500/50 transition-all shadow-2xl">
           <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t('critical_threats')}</p>
           <div className="flex items-end gap-3">
              <h3 className="text-4xl font-black text-red-500">{metrics.criticalIncidents}</h3>
@@ -161,7 +161,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2rem] relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-2xl">
+        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-2xl">
           <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Analyst Sessions</p>
           <div className="flex items-end gap-3">
              <h3 className="text-4xl font-black text-white">{sessionStats.filter(s => s.status === 'ONLINE').length}</h3>
@@ -176,7 +176,7 @@ const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
 
-        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-[2rem] relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-2xl">
+        <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-2xl">
           <p className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">{t('pending_protocols')}</p>
           <div className="flex items-end gap-3">
              <h3 className="text-4xl font-black text-amber-500">{metrics.pendingApprovals}</h3>
@@ -191,7 +191,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Analyst Session & Audit Feed */}
         <div className="lg:col-span-1 flex flex-col gap-8">
-           <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] p-8 shadow-2xl flex flex-col gap-6">
+           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl flex flex-col gap-6">
               <div className="flex items-center justify-between">
                  <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
                    <Terminal className="w-5 h-5 text-blue-500" /> Audit Protocol
@@ -220,7 +220,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
            </div>
 
-           <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] p-8 shadow-2xl">
+           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
               <h4 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2 mb-6">
                  <Users className="w-5 h-5 text-purple-500" /> Team Pulse
               </h4>
@@ -244,7 +244,7 @@ const Dashboard: React.FC<DashboardProps> = ({
         {/* Intelligence Matrix */}
         <div className="lg:col-span-2 space-y-8">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2.5rem] shadow-xl">
+              <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-xl">
                  <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <Database className="w-4 h-4 text-blue-500" /> {t('infrastructure_matrix')}
                  </h5>
@@ -263,7 +263,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                  </div>
               </div>
 
-              <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2.5rem] shadow-xl">
+              <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl shadow-xl">
                  <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-6 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-orange-500" /> Hot Signals (Views)
                  </h5>
@@ -288,7 +288,7 @@ const Dashboard: React.FC<DashboardProps> = ({
            </div>
 
            {/* Popularity Matrix - Incidents */}
-           <div className="bg-zinc-900/50 border border-zinc-800 rounded-[2.5rem] p-8 shadow-xl">
+           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-8 shadow-xl">
               <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-6 flex items-center gap-2">
                  <MousePointer2 className="w-4 h-4 text-red-500" /> Investigated Threats (Most Viewed)
               </h5>
@@ -308,7 +308,7 @@ const Dashboard: React.FC<DashboardProps> = ({
            </div>
 
            {/* Core Telemetry Board */}
-           <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] overflow-hidden shadow-xl">
+           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
               <div className="p-6 border-b border-zinc-800 bg-zinc-950/30 flex items-center justify-between">
                  <h5 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
                     <Activity className="w-4 h-4 text-red-500" /> {t('priority_alerts')}

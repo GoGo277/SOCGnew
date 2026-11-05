@@ -272,7 +272,7 @@ const ComparativeAnalysis: React.FC<{ reports: ShiftReport[]; sla: SlaPolicy; on
                 <CartesianGrid stroke="#27272a" vertical={false} />
                 <XAxis dataKey="name" stroke="#71717a" fontSize={11} />
                 <YAxis stroke="#71717a" fontSize={11} allowDecimals={false} />
-                <Tooltip contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 12 }} />
+                <Tooltip contentStyle={{ background: 'var(--app-surface)', border: '1px solid var(--color-zinc-700)', borderRadius: 8, color: 'var(--color-zinc-100)' }} />
                 <Legend />
                 {SEVERITIES.map(s => <Bar key={s} dataKey={s} name={t(s)} stackId="a" fill={SEVERITY_STYLE[s].hex} />)}
               </BarChart>

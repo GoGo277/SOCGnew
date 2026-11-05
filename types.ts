@@ -154,6 +154,8 @@ export interface RolePermissions {
     duty?: boolean;
     shiftReports?: boolean;
     executive?: boolean;
+    alerts?: boolean;
+    cases?: boolean;
   };
   /** G-Eyes SR operational permissions (undefined => role default) */
   canManageSchedules?: boolean;

@@ -296,7 +296,7 @@ const App: React.FC = () => {
   if (currentUser.forcePasswordChange) {
     return (
       <I18nProvider lang={settings.language}>
-      <div className="min-h-screen bg-[#09090b]">
+      <div className="min-h-screen bg-[var(--app-bg)]">
         <ForceChangePassword
           user={currentUser}
           forced

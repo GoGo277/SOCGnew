@@ -28,7 +28,7 @@ export const SESSION_TTL_HOURS = 12;
  */
 export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true' && !realtimeStore.isCloud();
 
-export const DEFAULT_NAV_ORDER = ['dashboard', 'duty', 'shift-reports', 'executive', 'reporting', 'incidents', 'assets', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests', 'admin-requests', 'audit'];
+export const DEFAULT_NAV_ORDER = ['dashboard', 'alerts', 'cases', 'duty', 'shift-reports', 'executive', 'reporting', 'incidents', 'assets', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests', 'admin-requests', 'customers', 'case-templates', 'integrations', 'audit'];
 
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'G-Eyes SR',

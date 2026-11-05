@@ -157,7 +157,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
         ))}
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-[2rem] p-8 shadow-xl">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-xl">
         {activeSubTab === 'general' && (
           <div className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
@@ -229,7 +229,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                  <div><h4 className="text-xl font-black text-white">{t('all_members')}</h4><p className="text-xs text-zinc-500 mt-1">Manage analyst credentials and access roles.</p></div>
                  <button onClick={() => { setIsUserFormOpen(true); setEditingUserId(null); setUserFormData({ username: '', email: '', password: '', role: 'L1' }); }} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:shadow-blue-500/40 active:scale-95 transition-all"><Plus className="w-4 h-4" /> {t('provision_analyst')}</button>
               </div>
-              <div className="overflow-hidden border border-zinc-800 rounded-[2rem] bg-zinc-950/30">
+              <div className="overflow-hidden border border-zinc-800 rounded-2xl bg-zinc-950/30">
                  <table className="w-full text-left">
                     <thead><tr className="border-b border-zinc-800 bg-zinc-900/50"><th className="p-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Analyst</th><th className="p-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center">Role</th><th className="p-5 text-right text-[10px] font-black text-zinc-500 uppercase tracking-widest">Actions</th></tr></thead>
                     <tbody className="divide-y divide-zinc-800/30">
@@ -253,7 +253,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
               {isUserFormOpen && (
                  <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsUserFormOpen(false)} />
-                    <div className="relative bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-lg shadow-2xl modal-entrance overflow-hidden">
+                    <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl modal-entrance overflow-hidden">
                        <form onSubmit={handleSaveUser}>
                           <div className="p-8 border-b border-zinc-800 bg-zinc-950/30 flex justify-between items-center"><h4 className="text-sm font-black text-white uppercase tracking-widest">{editingUserId ? 'Edit Analyst' : 'New Analyst'}</h4><button type="button" onClick={() => setIsUserFormOpen(false)} className="text-zinc-500 hover:text-white transition-all"><X className="w-6 h-6"/></button></div>
                           <div className="p-8 space-y-6">
@@ -288,11 +288,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                 <button onClick={handleExportMaster} className="p-8 rounded-[2rem] bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 transition-all text-left group flex flex-col gap-4 shadow-inner">
+                 <button onClick={handleExportMaster} className="p-8 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 transition-all text-left group flex flex-col gap-4 shadow-inner">
                     <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform"><Download className="w-6 h-6" /></div>
                     <div><h5 className="text-lg font-black text-white uppercase tracking-tight">Export Full Archive</h5><p className="text-xs text-zinc-500 mt-1">Package all SOC intel and credentials into a single JSON deployment file.</p></div>
                  </button>
-                 <button onClick={() => masterInputRef.current?.click()} className="p-8 rounded-[2rem] bg-zinc-950 border border-zinc-800 hover:border-emerald-500/30 transition-all text-left group flex flex-col gap-4 shadow-inner">
+                 <button onClick={() => masterInputRef.current?.click()} className="p-8 rounded-2xl bg-zinc-950 border border-zinc-800 hover:border-emerald-500/30 transition-all text-left group flex flex-col gap-4 shadow-inner">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-600/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform"><FileJson className="w-6 h-6" /></div>
                     <div><h5 className="text-lg font-black text-white uppercase tracking-tight">Import Master State</h5><p className="text-xs text-zinc-500 mt-1">Wipe local data and restore the entire platform state from a master file.</p></div>
                     <input type="file" ref={masterInputRef} onChange={handleImportMaster} className="hidden" accept=".json" />
@@ -305,7 +305,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
            <div className="space-y-12 animate-in slide-in-from-bottom-2 duration-400">
               <div className="space-y-4">
                  <h5 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2"><Shield className="w-4 h-4 text-blue-500" /> Functional Permissions</h5>
-                 <div className="overflow-x-auto rounded-[2rem] border border-zinc-800 bg-zinc-950/50 shadow-2xl">
+                 <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950/50 shadow-2xl">
                     <table className="w-full text-left">
                        <thead><tr className="border-b border-zinc-800 bg-zinc-900/80"><th className="p-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest">Capability</th>{(['Admin', 'L2', 'L1'] as UserRole[]).map(role => (<th key={role} className="p-5 text-[10px] font-black text-zinc-500 uppercase tracking-widest text-center">{role}</th>))}</tr></thead>
                        <tbody className="divide-y divide-zinc-800/30">{[

@@ -91,7 +91,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
 
   return (
     <div className="flex h-[calc(100vh-160px)] gap-6 animate-in fade-in duration-500">
-      <aside className="w-80 flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-[2rem] overflow-hidden shadow-xl">
+      <aside className="w-80 flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-6 border-b border-zinc-800 bg-zinc-950/30">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
@@ -122,7 +122,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col bg-zinc-900 border border-zinc-800 rounded-[2.5rem] overflow-hidden shadow-2xl relative">
+      <div className="flex-1 flex flex-col bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl relative">
         {activeRoom ? (
           <>
             <header className="p-5 border-b border-zinc-800 bg-zinc-950/30 flex items-center justify-between">
@@ -162,7 +162,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
                            </span>
                            {isMe && <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider">Me</span>}
                         </div>
-                        <div className={`max-w-[70%] p-4 rounded-[1.5rem] border shadow-lg ${isMe ? 'bg-blue-600/10 border-blue-500/30 text-zinc-100 rounded-tr-none' : 'bg-zinc-800 border-zinc-700 text-zinc-200 rounded-tl-none'}`}>
+                        <div className={`max-w-[70%] p-4 rounded-xl border shadow-lg ${isMe ? 'bg-blue-600/10 border-blue-500/30 text-zinc-100 rounded-tr-none' : 'bg-zinc-800 border-zinc-700 text-zinc-200 rounded-tl-none'}`}>
                           <p className="text-sm font-medium leading-relaxed select-text">{msg.content}</p>
                           {msg.mediaUrl && <img src={msg.mediaUrl} className="mt-3 rounded-xl max-h-80 border border-white/5" />}
                         </div>
@@ -197,7 +197,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center space-y-6">
-            <div className="w-20 h-20 rounded-[2rem] bg-zinc-950 border border-zinc-800 flex items-center justify-center animate-pulse"><MessageSquare className="w-8 h-8 text-zinc-800" /></div>
+            <div className="w-20 h-20 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center animate-pulse"><MessageSquare className="w-8 h-8 text-zinc-800" /></div>
             <h5 className="text-xl font-black text-zinc-400">{t('zero_signals')}</h5>
           </div>
         )}
@@ -206,7 +206,7 @@ const MessagingPage: React.FC<MessagingPageProps> = ({ currentUser, language }) 
       {showNewRoomModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
            <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setShowNewRoomModal(false)} />
-           <div className="relative bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-md shadow-2xl modal-entrance overflow-hidden flex flex-col max-h-[80vh]">
+           <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl modal-entrance overflow-hidden flex flex-col max-h-[80vh]">
               <div className="p-6 border-b border-zinc-800 bg-zinc-950/30 flex items-center justify-between">
                 <h4 className="text-xs font-black text-white uppercase tracking-[0.2em]">New Direct Message</h4>
                 <button onClick={() => setShowNewRoomModal(false)} className="text-zinc-500 hover:text-white"><X className="w-5 h-5"/></button>

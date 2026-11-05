@@ -1,5 +1,185 @@
 @import "tailwindcss";
 
+/*
+ * G-Eyes SR theme — IRIS-inspired.
+ * Layout concept: calm investigation workspace — navy/white neutrals, one blue
+ * accent, compact radii, dense readable tables (inspired by DFIR-IRIS).
+ * The neutral scale (zinc-*) and `white` are remapped per theme so every
+ * existing utility follows the active theme.
+ */
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Lato", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-blue-400: #5a9cf2;
+  --color-blue-500: #2a83f0;
+  --color-blue-600: #1572e8;
+  --color-blue-700: #115cbb;
+  --radius-lg: 0.4rem;
+  --radius-xl: 0.5rem;
+  --radius-2xl: 0.625rem;
+  --radius-3xl: 0.75rem;
+  --color-zinc-50: #f6f8fc;
+  --color-zinc-100: #eef1f7;
+  --color-zinc-200: #dde2ee;
+  --color-zinc-300: #c5cbdb;
+  --color-zinc-400: #a4adc4;
+  --color-zinc-500: #7d87a1;
+  --color-zinc-600: #5b6580;
+  --color-zinc-700: #363f58;
+  --color-zinc-800: #2a3248;
+  --color-zinc-900: #1f2639;
+  --color-zinc-950: #171d2e;
+  --color-white: #ffffff;
+  --app-bg: #171d2e;
+  --app-surface: #1f2639;
+  --app-sidebar: #1a2035;
+  --app-scroll-track: #1f2639;
+  --app-scroll-thumb: #363f58;
+}
+
+:root { color-scheme: dark; }
+
+/* Light theme: explicit choice, or the OS preference when no choice was made. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+  --color-zinc-50: #0f1320;
+  --color-zinc-100: #1a2035;
+  --color-zinc-200: #2a3040;
+  --color-zinc-300: #3b4252;
+  --color-zinc-400: #525b6e;
+  --color-zinc-500: #6b7385;
+  --color-zinc-600: #8a93a6;
+  --color-zinc-700: #cfd5e1;
+  --color-zinc-800: #e3e7ef;
+  --color-zinc-900: #ffffff;
+  --color-zinc-950: #f4f6fb;
+  --color-white: #1a2035;
+    --app-bg: #f4f6fb;
+    --app-surface: #ffffff;
+    --app-sidebar: #ffffff;
+    --app-scroll-track: #eef1f7;
+    --app-scroll-thumb: #c5cbdb;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --color-zinc-50: #0f1320;
+  --color-zinc-100: #1a2035;
+  --color-zinc-200: #2a3040;
+  --color-zinc-300: #3b4252;
+  --color-zinc-400: #525b6e;
+  --color-zinc-500: #6b7385;
+  --color-zinc-600: #8a93a6;
+  --color-zinc-700: #cfd5e1;
+  --color-zinc-800: #e3e7ef;
+  --color-zinc-900: #ffffff;
+  --color-zinc-950: #f4f6fb;
+  --color-white: #1a2035;
+  --app-bg: #f4f6fb;
+  --app-surface: #ffffff;
+  --app-sidebar: #ffffff;
+  --app-scroll-track: #eef1f7;
+  --app-scroll-thumb: #c5cbdb;
+  color-scheme: light;
+}
+
+/* Text on solid accent fills stays white in every theme. */
+:is(
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-blue-700,
+  .bg-red-500,
+  .bg-red-600,
+  .bg-red-700,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-sky-500,
+  .bg-sky-600,
+  .bg-sky-700,
+  .bg-violet-500,
+  .bg-violet-600,
+  .bg-violet-700,
+  .bg-amber-500,
+  .bg-amber-600,
+  .bg-amber-700,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-orange-700,
+  .bg-green-500,
+  .bg-green-600,
+  .bg-green-700,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-indigo-700,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-purple-700,
+  .bg-pink-500,
+  .bg-pink-600,
+  .bg-pink-700,
+  .bg-cyan-500,
+  .bg-cyan-600,
+  .bg-cyan-700,
+  .bg-teal-500,
+  .bg-teal-600,
+  .bg-teal-700,
+  .bg-rose-500,
+  .bg-rose-600,
+  .bg-rose-700
+).text-white { color: #ffffff; }
+:is(
+  .bg-blue-500,
+  .bg-blue-600,
+  .bg-blue-700,
+  .bg-red-500,
+  .bg-red-600,
+  .bg-red-700,
+  .bg-emerald-500,
+  .bg-emerald-600,
+  .bg-emerald-700,
+  .bg-sky-500,
+  .bg-sky-600,
+  .bg-sky-700,
+  .bg-violet-500,
+  .bg-violet-600,
+  .bg-violet-700,
+  .bg-amber-500,
+  .bg-amber-600,
+  .bg-amber-700,
+  .bg-orange-500,
+  .bg-orange-600,
+  .bg-orange-700,
+  .bg-green-500,
+  .bg-green-600,
+  .bg-green-700,
+  .bg-indigo-500,
+  .bg-indigo-600,
+  .bg-indigo-700,
+  .bg-purple-500,
+  .bg-purple-600,
+  .bg-purple-700,
+  .bg-pink-500,
+  .bg-pink-600,
+  .bg-pink-700,
+  .bg-cyan-500,
+  .bg-cyan-600,
+  .bg-cyan-700,
+  .bg-teal-500,
+  .bg-teal-600,
+  .bg-teal-700,
+  .bg-rose-500,
+  .bg-rose-600,
+  .bg-rose-700
+) :is(.text-white) { color: #ffffff; }
+
+body { background: var(--app-bg); color: var(--color-zinc-100); }
+
+/* IRIS-like calmer type: heavy display weights are reduced slightly. */
+.font-black { font-weight: 800; }
+
+:focus-visible { outline: 2px solid var(--color-blue-500); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

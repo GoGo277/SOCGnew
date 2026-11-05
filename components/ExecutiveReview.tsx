@@ -12,7 +12,7 @@ import { buildExecutiveBrief } from '../services/briefService';
 
 interface Props { reports: ShiftReport[]; acks: HandoverAck[]; sla?: SlaPolicy; currentUser: User }
 
-const tooltipStyle = { background: '#18181b', border: '1px solid #3f3f46', borderRadius: 12, fontSize: 12 };
+const tooltipStyle = { background: 'var(--app-surface)', border: '1px solid var(--color-zinc-700)', borderRadius: 8, fontSize: 12, color: 'var(--color-zinc-100)' };
 
 const ExecutiveReview: React.FC<Props> = ({ reports, acks, sla = DEFAULT_SLA, currentUser }) => {
   const t = useT();
@@ -200,7 +200,7 @@ const ExecutiveReview: React.FC<Props> = ({ reports, acks, sla = DEFAULT_SLA, cu
 };
 
 const Kpi: React.FC<{ icon: React.ElementType; label: string; value: React.ReactNode; sub: string }> = ({ icon: Icon, label, value, sub }) => (
-  <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-[1.5rem] shadow-2xl min-w-0">
+  <div className="bg-zinc-900 border border-zinc-800 p-4 sm:p-5 rounded-xl shadow-2xl min-w-0">
     <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2"><Icon className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{label}</span></p>
     <div className="text-2xl sm:text-3xl font-black text-white mt-1 truncate">{value}</div>
     <p className="text-[11px] text-zinc-500 mt-1 truncate">{sub}</p>
