@@ -150,3 +150,47 @@ describe('reporting', () => {
     await assertFails(setDoc(doc(admin(), 'mail/m1'), { to: ['x@y.z'] }));
   });
 });
+
+describe('case management', () => {
+  const kase = (over: Record<string, unknown> = {}) => ({ id: 'k1', number: 1, name: 'Phish', state: 'Open', outcome: 'Unknown', openedBy: 'alice', openedAt: 't', customerId: 'internal', ...over });
+  it('lets members open and work cases, but only closes with an outcome', async () => {
+    await assertSucceeds(setDoc(doc(analyst(), 'cases/k1'), kase()));
+    await assertFails(setDoc(doc(analyst(), 'cases/k2'), { ...kase({ id: 'k2', openedBy: 'Admin' }) }));
+    await assertSucceeds(updateDoc(doc(analyst(), 'cases/k1'), { state: 'Containment' }));
+    await assertFails(updateDoc(doc(analyst(), 'cases/k1'), { state: 'Closed' }));
+    await assertSucceeds(updateDoc(doc(analyst(), 'cases/k1'), { state: 'Closed', outcome: 'False positive' }));
+    await assertFails(updateDoc(doc(analyst(), 'cases/k1'), { number: 99 }));
+  });
+  it('restricts case deletion to verified administrators', async () => {
+    await env.withSecurityRulesDisabled(ctx => setDoc(doc(ctx.firestore(), 'cases/k1'), kase()));
+    await assertFails(deleteDoc(doc(analyst(), 'cases/k1')));
+    await assertFails(deleteDoc(doc(admin(false), 'cases/k1')));
+    await assertSucceeds(deleteDoc(doc(admin(), 'cases/k1')));
+  });
+  it('protects evidence hashes and the chain of custody', async () => {
+    const ev = { id: 'e1', caseId: 'k1', sha256: 'a'.repeat(64), custody: [{ at: 't', by: 'alice', action: 'Registered' }] };
+    await assertSucceeds(setDoc(doc(analyst(), 'case_evidence/e1'), ev));
+    await assertFails(updateDoc(doc(analyst(), 'case_evidence/e1'), { sha256: 'b'.repeat(64) }));
+    await assertFails(updateDoc(doc(analyst(), 'case_evidence/e1'), { custody: [] }));
+    await assertSucceeds(updateDoc(doc(analyst(), 'case_evidence/e1'), { custody: [...ev.custody, { at: 't2', by: 'alice', action: 'Copied' }] }));
+    await assertFails(deleteDoc(doc(analyst(), 'case_evidence/e1')));
+  });
+  it('keeps the case activity feed append-only and attributed', async () => {
+    await assertSucceeds(setDoc(doc(analyst(), 'case_activity/a1'), { id: 'a1', caseId: 'k1', by: 'alice', action: 'x', at: 't', detail: '' }));
+    await assertFails(setDoc(doc(analyst(), 'case_activity/a2'), { id: 'a2', caseId: 'k1', by: 'Admin', action: 'x', at: 't', detail: '' }));
+    await assertFails(updateDoc(doc(analyst(), 'case_activity/a1'), { detail: 'edited' }));
+  });
+  it('only increments sequence counters by one', async () => {
+    await assertSucceeds(setDoc(doc(analyst(), 'counters/case'), { value: 1 }));
+    await assertSucceeds(setDoc(doc(analyst(), 'counters/case'), { value: 2 }));
+    await assertFails(setDoc(doc(analyst(), 'counters/case'), { value: 10 }));
+    await assertFails(setDoc(doc(analyst(), 'counters/other'), { value: 1 }));
+  });
+  it('restricts customers, case templates and integration state', async () => {
+    await assertFails(setDoc(doc(analyst(), 'customers/c1'), { name: 'ACME' }));
+    await assertSucceeds(setDoc(doc(admin(), 'customers/c1'), { name: 'ACME' }));
+    await assertFails(setDoc(doc(analyst(), 'case_templates/t1'), { name: 'x' }));
+    await assertFails(getDoc(doc(analyst(), 'integrations/iris')));
+    await assertFails(setDoc(doc(admin(), 'integrations/iris'), { lockedUntil: null }));
+  });
+});

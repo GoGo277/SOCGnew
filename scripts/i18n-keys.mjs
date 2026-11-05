@@ -33,6 +33,8 @@ const dynamic = [
   'Informational alert, benign probe or low-risk firewall drop.',
   'Invalid security credentials provided', 'Account disabled. Contact an administrator.', 'Invalid authentication code',
   'Sign-in session expired. Start again.', 'Too many failed attempts. Try again later or contact an administrator.',
+  // case management (IRIS-style) labels rendered from data
+  "Overview", "SOC operations", "Collaboration", "Administration", "Open", "In progress", "Containment", "Eradication", "Recovery", "Post-incident", "Reporting", "Closed", "Unknown", "False Positive", "True positive with impact", "True positive without impact", "Not applicable", "Legitimate", "New", "Assigned", "Pending", "Merged", "Escalated", "To be determined", "Compromised", "Not compromised", "Unspecified", "To be done", "Started", "Done", "To do", "On hold", "Canceled", "Remediation", "Initial Access", "Execution", "Persistence", "Privilege Escalation", "Defense Evasion", "Credential Access", "Discovery", "Lateral Movement", "Collection", "Command and Control", "Exfiltration", "Impact", "Disk image", "Memory dump", "Log export", "Network capture (PCAP)", "Malware sample", "Email (EML)", "Document", "Screenshot", "Other", "Firestore Cloud Sync", "Local Sync (offline mode)", "Case opened", "Case updated", "Case closed", "Case reopened", "Updated from IRIS", "Pushed to IRIS", "Imported from IRIS", "Added IOC", "Updated IOC", "Removed IOC", "Added asset", "Updated asset", "Removed asset", "Added timeline event", "Updated timeline event", "Removed timeline event", "Added evidence", "Updated evidence", "Removed evidence", "Added note", "Updated note", "Removed note", "Added task", "Updated task", "Removed task",
 ];
 dynamic.forEach(k => keys.add(k));
 

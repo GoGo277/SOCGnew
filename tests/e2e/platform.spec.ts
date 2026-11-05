@@ -110,15 +110,15 @@ test('incoming shift signs off the handover', async () => {
   await expect(seen(/acknowledged by Admin/)).toBeVisible();
 });
 
-test('current shift: open items carry over, escalate to an incident, lifecycle and SLA', async () => {
+test('current shift: open items carry over, escalate to an alert, lifecycle and SLA', async () => {
   await page.getByRole('button', { name: /Open current shift/ }).click();
   await expect(seen('Carried over')).toBeVisible();
   await expect(seen('Ransomware beacon on file server')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Escalate to incident' }).first().click();
-  await page.getByRole('button', { name: 'Create incident' }).click();
-  await toast(page, /Incident .* created/);
-  await expect(seen(/^Incident [0-9a-z-]{8}$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Escalate to alert' }).filter({ visible: true }).first().click();
+  await page.getByRole('button', { name: 'Create alert' }).click();
+  await toast(page, /Alert #\d+ created/);
+  await expect(page.getByRole('button', { name: /Alert #1 · New/ }).filter({ visible: true }).first()).toBeVisible();
 
   await page.getByLabel('Status').first().selectOption('Contained');
   await expect(page.getByLabel('Status').first()).toHaveValue('Contained');
@@ -133,9 +133,11 @@ test('current shift: open items carry over, escalate to an incident, lifecycle a
   await expect(seen(/Immutable operational record/)).toBeVisible();
 });
 
-test('escalated incident appears in the incident register', async () => {
-  await nav(page, 'Incidents');
+test('escalated event appears in the alert triage queue with its IOCs', async () => {
+  await nav(page, 'Alerts');
   await expect(seen('Ransomware beacon on file server')).toBeVisible();
+  await seen('Ransomware beacon on file server').click();
+  await expect(seen('198.51.100.23')).toBeVisible();
 });
 
 test('exports a sealed report as PDF and a batch ZIP', async () => {
@@ -211,7 +213,7 @@ test('audit trail is complete and verifiable', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await nav(page, 'Audit Trail');
-  for (const action of ['MFA_ENROLLED', 'FORCED_PASSWORD_CHANGE', 'USER_CREATED', 'SHIFT_REPORT_FINALIZED', 'HANDOVER_ACKNOWLEDGED', 'EVENT_ESCALATED', 'SHIFT_SWAP_APPROVED', 'LOGIN_FAILED']) {
+  for (const action of ['MFA_ENROLLED', 'FORCED_PASSWORD_CHANGE', 'USER_CREATED', 'SHIFT_REPORT_FINALIZED', 'HANDOVER_ACKNOWLEDGED', 'EVENT_ESCALATED', 'ALERT_CREATED', 'SHIFT_SWAP_APPROVED', 'LOGIN_FAILED']) {
     await expect(page.locator('td span', { hasText: new RegExp(`^${action}$`) }).first()).toBeVisible();
   }
   await page.getByRole('button', { name: 'Verify integrity' }).click();

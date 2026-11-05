@@ -20,7 +20,7 @@ export default defineConfig({
     locale: 'en-US',
   },
   projects: [
-    { name: 'desktop', testMatch: /platform\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'desktop', testMatch: /(platform|investigation)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'mobile', testMatch: /mobile\.spec\.ts/, use: { ...devices['Pixel 7'] } },
   ],
   webServer: {
