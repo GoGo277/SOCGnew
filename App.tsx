@@ -34,12 +34,17 @@ import Toast from './components/Toast';
 import ForceChangePassword from './components/ForceChangePassword';
 import DutyNow from './components/DutyNow';
 import MonthlySchedule from './components/MonthlySchedule';
-import ShiftReportsPage from './components/ShiftReportsPage';
+import ShiftReportsPage from './components/shift/ShiftReportsPage';
+import HandoverPanel from './components/shift/HandoverPanel';
+import { handoverService } from './services/handoverService';
+import { templateService } from './services/templateService';
+import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
 import AuditLogPage from './components/AuditLogPage';
 import { dutyService } from './services/dutyService';
 import { shiftReportService } from './services/shiftReportService';
-import { DutySchedule, ShiftReport } from './types';
+import { DutySchedule, ShiftReport, HandoverAck, ReportTemplate } from './types';
+import { I18nProvider } from './i18n';
 import { Plus, Tag as TagIcon, Search, SlidersHorizontal, Activity, ArrowRight, Download, Upload, Trash2, Edit3 } from 'lucide-react';
 import { ASSET_TYPE_ICONS, ASSET_TYPES, ASSET_TYPE_COLORS } from './constants';
 import { getTranslator } from './translations';
@@ -84,6 +89,9 @@ const App: React.FC = () => {
   const [toast, setToast] = useState<{ message: string, isOpen: boolean }>({ message: '', isOpen: false });
   const [dutySchedules, setDutySchedules] = useState<Record<string, DutySchedule>>({});
   const [shiftReports, setShiftReports] = useState<ShiftReport[]>([]);
+  const [handoverAcks, setHandoverAcks] = useState<HandoverAck[]>([]);
+  const [reportTemplates, setReportTemplates] = useState<ReportTemplate[]>([]);
+  const [focusReportId, setFocusReportId] = useState<string | null>(null);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Firestore real-time sync of the user registry & global settings.
@@ -95,6 +103,8 @@ const App: React.FC = () => {
     const unsubs = [
       dutyService.subscribe(setDutySchedules),
       shiftReportService.subscribe(setShiftReports),
+      handoverService.subscribe(setHandoverAcks),
+      templateService.subscribe(setReportTemplates),
       auditService.subscribe(setAuditLogs),
     ];
     return () => unsubs.forEach(u => u());
@@ -242,12 +252,13 @@ const App: React.FC = () => {
   };
 
   if (!currentUser) {
-    return <Login onLogin={handleLogin} settings={settings} />;
+    return <I18nProvider lang={settings.language}><Login onLogin={handleLogin} settings={settings} /></I18nProvider>;
   }
 
   // Forced password reset protocol: block all access until the temporary credential is rotated.
   if (currentUser.forcePasswordChange) {
     return (
+      <I18nProvider lang={settings.language}>
       <div className="min-h-screen bg-[#09090b]">
         <ForceChangePassword
           user={currentUser}
@@ -256,12 +267,27 @@ const App: React.FC = () => {
           onCancel={handleLogout}
         />
       </div>
+      </I18nProvider>
     );
   }
 
   const permissions = settings.rolePermissions[currentUser.role];
   const isAdmin = currentUser.role === 'Admin';
   const canManageSchedules = isAdmin || !!permissions.canManageSchedules;
+  const sla = settings.sla ?? DEFAULT_SLA;
+
+  /** Persist an incident created from a shift event (escalation). */
+  const saveEscalatedIncident = async (data: Partial<Incident>): Promise<Incident> => {
+    const saved = incidentService.saveIncident(data as any);
+    const remote = await supabaseService.saveIncident(saved);
+    const finalSaved = remote || saved;
+    auditService.log(currentUser, 'CREATE_INCIDENT', { id: finalSaved.id, name: finalSaved.eventName }, { source: 'shift-escalation' });
+    await loadData();
+    return finalSaved;
+  };
+
+  const openReport = (id: string) => { setFocusReportId(id); handleTabChange('shift-reports'); };
+  const handoverStatus = handoverService.currentStatus(shiftReports, handoverAcks, dutySchedules, currentUser);
 
   const handleSaveAsset = async (assetData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateAsset || !permissions.canEditAsset)) {
@@ -415,12 +441,17 @@ const App: React.FC = () => {
       case 'dashboard': return (
         <div className="space-y-8">
           <DutyNow schedules={dutySchedules} users={users} currentUser={currentUser} />
+          <HandoverPanel status={handoverStatus} acks={handoverAcks} currentUser={currentUser} sla={sla} canAcknowledge={permissions.canLogShiftEvents !== false} onToast={showToast} onOpenReport={openReport} />
           <Dashboard assets={assets} incidents={incidents} tasks={tasks} requests={requests} announcements={announcements} guidelines={guidelines} auditLogs={auditLogs} language={settings.language} />
         </div>
       );
       case 'duty': return <MonthlySchedule schedules={dutySchedules} users={users} currentUser={currentUser} canManage={canManageSchedules} onToast={showToast} />;
-      case 'shift-reports': return <ShiftReportsPage reports={shiftReports} currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions} onToast={showToast} />;
-      case 'executive': return <ExecutiveReview reports={shiftReports} currentUser={currentUser} />;
+      case 'shift-reports': return (
+        <ShiftReportsPage reports={shiftReports} acks={handoverAcks} schedules={dutySchedules} assets={assets} templates={reportTemplates} sla={sla}
+          currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions}
+          focusReportId={focusReportId} onFocusConsumed={() => setFocusReportId(null)} onToast={showToast} saveIncident={saveEscalatedIncident} />
+      );
+      case 'executive': return <ExecutiveReview reports={shiftReports} acks={handoverAcks} sla={sla} currentUser={currentUser} />;
       case 'audit': return (isAdmin || permissions.canViewAuditLog) ? <AuditLogPage logs={auditLogs} currentUser={currentUser} onToast={showToast} /> : null;
       case 'assets': return (
         <div className="space-y-6">
@@ -555,6 +586,7 @@ const App: React.FC = () => {
   };
 
   return (
+    <I18nProvider lang={settings.language}>
     <Layout onChangePassword={() => setIsChangePasswordOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
       <NotificationCenter isOpen={isNotifCenterOpen} onClose={() => setIsNotifCenterOpen(false)} currentUser={currentUser} notifications={notifications} requests={requests} onUpdate={loadData} onOpenRequest={setSelectedRequest} language={settings.language} />
       {renderActiveTab()}
@@ -572,6 +604,7 @@ const App: React.FC = () => {
       )}
       <Toast message={toast.message} isOpen={toast.isOpen} onClose={() => setToast(p => ({ ...p, isOpen: false }))} />
     </Layout>
+    </I18nProvider>
   );
 };
 

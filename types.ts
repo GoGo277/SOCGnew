@@ -166,7 +166,14 @@ export interface AppSettings {
   rolePermissions: Record<UserRole, RolePermissions>;
   language: Language;
   navOrder: string[];
+  /** Response-time targets per severity (minutes from detection). */
+  sla?: SlaPolicy;
+  /** Admin accounts must enrol TOTP multi-factor authentication. */
+  requireAdminMfa?: boolean;
 }
+
+export interface SlaTarget { containMinutes: number; resolveMinutes: number }
+export type SlaPolicy = Record<Severity, SlaTarget>;
 
 export interface Message {
   id: string;
@@ -231,6 +238,108 @@ export interface ShiftEvent {
   loggedById: string;
   createdAt: string;
   updatedAt: string;
+  /** Lifecycle — `timestamp` is the detection time. */
+  status?: EventStatus;
+  /** First observed malicious activity (for time-to-detect). */
+  occurredAt?: string;
+  containedAt?: string;
+  resolvedAt?: string;
+  /** Stable id across shift carry-overs (original event id). */
+  rootEventId?: string;
+  carriedFromReportId?: string;
+  carriedFromEventId?: string;
+  escalatedIncidentId?: string;
+  escalatedAt?: string;
+  escalatedBy?: string;
+}
+
+export type EventStatus = 'Open' | 'Contained' | 'Resolved' | 'False Positive';
+
+/** Firestore `handover_acks/{reportId}` — incoming shift sign-off of the previous report. */
+export interface HandoverAck {
+  id: string; // = acknowledged report id
+  reportId: string;
+  acknowledgedBy: string;
+  acknowledgedById: string;
+  acknowledgedAt: string;
+  incomingDate: string;
+  incomingShift: ShiftId;
+  comment: string;
+  reportIntegrityHash?: string;
+}
+
+export type SwapStatus = 'pending_peer' | 'pending_admin' | 'approved' | 'rejected' | 'declined' | 'cancelled';
+
+/** Firestore `shift_swaps/{id}` */
+export interface ShiftSwapRequest {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  date: string;
+  shift: ShiftId;
+  /** Colleague who takes over the shift. */
+  peerId: string;
+  peerName: string;
+  /** Optional shift the requester takes in return. */
+  returnDate?: string;
+  returnShift?: ShiftId;
+  reason: string;
+  status: SwapStatus;
+  createdAt: string;
+  peerRespondedAt?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  decisionNote?: string;
+}
+
+export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly';
+
+/** Firestore `report_templates/{id}` — saved customizer presets. */
+export interface ReportTemplate {
+  id: string;
+  name: string;
+  description: string;
+  options: ReportExportOptions;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Firestore `report_schedules/{id}` */
+export interface ReportSchedule {
+  id: string;
+  name: string;
+  kind: 'executive_brief' | 'shift_digest';
+  frequency: ScheduleFrequency;
+  /** weekly: 0-6 (Sun-Sat); monthly: 1-28 */
+  dayOfWeek?: number;
+  dayOfMonth?: number;
+  hour: number; // local hour 0-23
+  recipients: string[];
+  templateId?: string;
+  includeDrafts: boolean;
+  enabled: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string;
+  nextRunAt: string;
+}
+
+/** Firestore `report_archive/{id}` — generated scheduled report runs. */
+export interface ArchivedReport {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  kind: ReportSchedule['kind'];
+  periodFrom: string;
+  periodTo: string;
+  generatedAt: string;
+  generatedBy: string; // 'scheduler' | 'cloud-scheduler' | username
+  markdown: string;
+  sha256: string;
+  recipients: string[];
+  delivery: 'queued' | 'archived_only';
 }
 
 export type ShiftReportStatus = 'draft' | 'finalized';

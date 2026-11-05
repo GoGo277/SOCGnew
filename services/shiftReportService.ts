@@ -1,5 +1,7 @@
-import { ShiftEvent, ShiftReport, User } from '../types';
+import { Asset, EventStatus, Incident, IncidentStatus, ShiftEvent, ShiftReport, User } from '../types';
 import { ShiftId, getShift } from '../lib/shifts';
+import { isOpenItem } from '../lib/sla';
+import { shiftSortKey } from './analytics';
 import { realtimeStore } from './realtimeStore';
 import { auditService } from './auditService';
 import { sha256, canonicalJson } from '../lib/crypto';
@@ -53,9 +55,115 @@ export const shiftReportService = {
     const found = existing.find(r => r.id === id);
     if (found) return found;
     const draft = shiftReportService.newDraft(actor, date, shift);
+    const source = shiftReportService.carryOverSource(existing, date, shift);
+    const carried = source ? shiftReportService.openItemsToCarry(source, draft) : [];
+    draft.events = carried;
     await realtimeStore.set(REPORTS_COLLECTION, draft);
     auditService.log(actor, 'SHIFT_REPORT_CREATED', { id, name: draft.title });
+    if (source && carried.length) {
+      auditService.log(actor, 'SHIFT_ITEMS_CARRIED_OVER', { id, name: draft.title }, { from: source.id, count: carried.length, rootEventIds: carried.map(e => e.rootEventId) });
+    }
     return draft;
+  },
+
+  /** Most recent finalized report strictly before the given shift slot. */
+  carryOverSource(reports: ShiftReport[], date: string, shift: ShiftId): ShiftReport | undefined {
+    const key = shiftSortKey(date, shift);
+    return reports
+      .filter(r => r.status === 'finalized' && shiftSortKey(r.date, r.shift) < key)
+      .sort((a, b) => shiftSortKey(b.date, b.shift).localeCompare(shiftSortKey(a.date, a.shift)))[0];
+  },
+
+  /** Copies of unresolved events from `source` that are not yet present in `target`. */
+  openItemsToCarry(source: ShiftReport, target: ShiftReport): ShiftEvent[] {
+    const present = new Set(target.events.map(e => e.rootEventId || e.id));
+    const now = new Date().toISOString();
+    return source.events
+      .filter(e => isOpenItem(e) && !present.has(e.rootEventId || e.id))
+      .map(e => ({
+        ...e,
+        id: crypto.randomUUID(),
+        rootEventId: e.rootEventId || e.id,
+        carriedFromReportId: source.id,
+        carriedFromEventId: e.id,
+        createdAt: now,
+        updatedAt: now,
+      }));
+  },
+
+  /** Pull newly available open items into an existing draft. */
+  async importOpenItems(actor: User, report: ShiftReport, reports: ShiftReport[]): Promise<number> {
+    assertDraft(report);
+    const source = shiftReportService.carryOverSource(reports, report.date, report.shift);
+    if (!source) return 0;
+    const items = shiftReportService.openItemsToCarry(source, report);
+    if (!items.length) return 0;
+    const next: ShiftReport = {
+      ...report,
+      events: [...report.events, ...items].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+      updatedAt: new Date().toISOString(),
+      updatedBy: actor.username,
+      revision: (report.revision || 0) + 1,
+    };
+    await realtimeStore.set(REPORTS_COLLECTION, next);
+    auditService.log(actor, 'SHIFT_ITEMS_CARRIED_OVER', { id: report.id, name: report.title }, { from: source.id, count: items.length, rootEventIds: items.map(e => e.rootEventId) });
+    return items.length;
+  },
+
+  /** Quick lifecycle transition; stamps containment / resolution times. */
+  withStatus(ev: ShiftEvent, status: EventStatus, at = new Date().toISOString()): ShiftEvent {
+    const next: ShiftEvent = { ...ev, status, updatedAt: at };
+    if (status === 'Open') { next.containedAt = undefined; next.resolvedAt = undefined; }
+    if (status === 'Contained') { next.containedAt = ev.containedAt ?? at; next.resolvedAt = undefined; }
+    if (status === 'Resolved') { next.containedAt = ev.containedAt ?? at; next.resolvedAt = ev.resolvedAt ?? at; }
+    return next;
+  },
+
+  async setEventStatus(actor: User, report: ShiftReport, ev: ShiftEvent, status: EventStatus): Promise<ShiftReport> {
+    const updated = shiftReportService.withStatus(ev, status);
+    const next = await shiftReportService.upsertEvent(actor, report, updated, report, true);
+    auditService.log(actor, 'EVENT_STATUS_CHANGED', { id: report.id, name: ev.eventName }, { eventId: ev.id, rootEventId: ev.rootEventId || ev.id, from: ev.status ?? 'Open', to: status });
+    return next;
+  },
+
+  /**
+   * Escalate a shift event into a tracked incident (Incidents module),
+   * linking it to known assets by IP, and record the link on the event.
+   */
+  async escalate(
+    actor: User,
+    report: ShiftReport,
+    ev: ShiftEvent,
+    assets: Asset[],
+    saveIncident: (i: Partial<Incident>) => Promise<Incident>
+  ): Promise<Incident> {
+    assertDraft(report);
+    if (ev.escalatedIncidentId) throw new Error('Event already escalated');
+    const byIp = (ip: string) => assets.find(a => ip && (a.ipv4 === ip || a.ipv6 === ip));
+    const statusMap: Record<EventStatus, IncidentStatus> = { Open: 'Active', Contained: 'Mitigated', Resolved: 'Resolved', 'False Positive': 'Resolved' };
+    const shiftLabel = getShift(report.shift).label;
+    const incident = await saveIncident({
+      eventName: ev.eventName,
+      severity: ev.severity,
+      status: statusMap[ev.status ?? 'Open'],
+      sourceIp: ev.sourceIp,
+      destinationIp: ev.destinationIp,
+      sourceAssetName: byIp(ev.sourceIp)?.name ?? '',
+      destinationAssetName: byIp(ev.destinationIp)?.name ?? '',
+      description: [ev.investigation, ev.port ? `Target port: ${ev.port}${ev.protocol ? '/' + ev.protocol : ''}` : ''].filter(Boolean).join('\n\n'),
+      response: [ev.remediation, ev.conclusion].filter(Boolean).join('\n\n'),
+      tags: ['shift-escalation', ev.attackType, `report:${report.id}`, `event:${ev.rootEventId || ev.id}`].filter(Boolean),
+      notes: [{
+        id: crypto.randomUUID(),
+        analyst: actor.username,
+        content: `Escalated from ${shiftLabel} report ${report.date} (${report.id}). Detected ${new Date(ev.timestamp).toLocaleString()}, logged by ${ev.loggedBy}.`,
+        timestamp: new Date().toISOString(),
+      }],
+    });
+    const now = new Date().toISOString();
+    await shiftReportService.upsertEvent(actor, report, { ...ev, escalatedIncidentId: incident.id, escalatedAt: now, escalatedBy: actor.username, updatedAt: now }, report, true);
+    auditService.log(actor, 'EVENT_ESCALATED', { id: incident.id, name: ev.eventName }, { reportId: report.id, eventId: ev.id, severity: ev.severity });
+    return incident;
   },
 
   /** Sync a working draft without sealing it. */
@@ -74,7 +182,7 @@ export const shiftReportService = {
     return next;
   },
 
-  async upsertEvent(actor: User, report: ShiftReport, event: ShiftEvent, latest?: ShiftReport): Promise<ShiftReport> {
+  async upsertEvent(actor: User, report: ShiftReport, event: ShiftEvent, latest?: ShiftReport, silent = false): Promise<ShiftReport> {
     const base = latest ?? report;
     assertDraft(base);
     const exists = base.events.some(e => e.id === event.id);
@@ -89,9 +197,11 @@ export const shiftReportService = {
       revision: (base.revision || 0) + 1,
     };
     await realtimeStore.set(REPORTS_COLLECTION, next);
-    auditService.log(actor, exists ? 'SHIFT_EVENT_UPDATED' : 'SHIFT_EVENT_ADDED', { id: report.id, name: event.eventName }, {
-      eventId: event.id, severity: event.severity, sourceIp: event.sourceIp,
-    });
+    if (!silent) {
+      auditService.log(actor, exists ? 'SHIFT_EVENT_UPDATED' : 'SHIFT_EVENT_ADDED', { id: report.id, name: event.eventName }, {
+        eventId: event.id, severity: event.severity, sourceIp: event.sourceIp, status: event.status ?? 'Open',
+      });
+    }
     return next;
   },
 

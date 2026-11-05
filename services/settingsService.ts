@@ -3,6 +3,7 @@ import { AppSettings, User, UserRole, RolePermissions, Language } from '../types
 import { realtimeStore } from './realtimeStore';
 import { hashPassword, randomSalt, safeEqual, checkPasswordPolicy } from '../lib/crypto';
 import { auditService } from './auditService';
+import { DEFAULT_SLA } from '../lib/sla';
 
 const SETTINGS_KEY = 'soc_app_settings';
 const USERS_KEY = 'soc_app_users';
@@ -22,6 +23,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   logoUrl: '',
   language: 'en',
   navOrder: [...DEFAULT_NAV_ORDER],
+  sla: JSON.parse(JSON.stringify(DEFAULT_SLA)),
+  requireAdminMfa: true,
   rolePermissions: {
     Admin: {
       canCreateAsset: true,
@@ -161,6 +164,8 @@ export const settingsService = {
       const parsed: AppSettings = data ? JSON.parse(data) : JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
       if (!parsed.language) parsed.language = 'en';
       if (!parsed.navOrder) parsed.navOrder = [...DEFAULT_NAV_ORDER];
+      parsed.sla = { ...JSON.parse(JSON.stringify(DEFAULT_SLA)), ...(parsed.sla || {}) };
+      if (parsed.requireAdminMfa === undefined) parsed.requireAdminMfa = true;
       // Merge in newly introduced modules / permissions for previously saved settings.
       DEFAULT_NAV_ORDER.forEach(id => { if (!parsed.navOrder.includes(id)) parsed.navOrder.push(id); });
       (Object.keys(DEFAULT_SETTINGS.rolePermissions) as UserRole[]).forEach(role => {

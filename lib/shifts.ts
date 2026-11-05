@@ -117,3 +117,21 @@ export const formatDuration = (ms: number): string => {
   const m = Math.floor((ms % 3_600_000) / 60_000);
   return `${h}h ${String(m).padStart(2, '0')}m`;
 };
+
+/** The shift slot immediately before the given one. */
+export const previousSlot = (dateKey: string, shift: ShiftId): { date: string; shift: ShiftId } => {
+  if (shift === 'morning') return { date: dateKey, shift: 'night' };
+  if (shift === 'evening') return { date: dateKey, shift: 'morning' };
+  const d = fromDateKey(dateKey);
+  d.setDate(d.getDate() - 1);
+  return { date: toDateKey(d), shift: 'evening' };
+};
+
+/** The shift slot immediately after the given one. */
+export const nextSlot = (dateKey: string, shift: ShiftId): { date: string; shift: ShiftId } => {
+  if (shift === 'night') return { date: dateKey, shift: 'morning' };
+  if (shift === 'morning') return { date: dateKey, shift: 'evening' };
+  const d = fromDateKey(dateKey);
+  d.setDate(d.getDate() + 1);
+  return { date: toDateKey(d), shift: 'night' };
+};

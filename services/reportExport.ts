@@ -1,9 +1,31 @@
 import { jsPDF } from 'jspdf';
 import JSZip from 'jszip';
-import { ExportFormat, ReportExportOptions, ShiftReport, Severity, User, CustomSection } from '../types';
+import { ExportFormat, ReportExportOptions, ShiftReport, Severity, User, CustomSection, HandoverAck, SlaPolicy, ShiftEvent } from '../types';
 import { getShift } from '../lib/shifts';
 import { computeMetrics, SEVERITIES } from './analytics';
 import { sha256 } from '../lib/crypto';
+import { DEFAULT_SLA, evaluateSla, eventStatus, formatMinutes, isOpenItem } from '../lib/sla';
+
+/** Extra context rendered into exports. */
+export interface ExportContext { ack?: HandoverAck; sla?: SlaPolicy }
+
+const slaLine = (e: ShiftEvent, sla: SlaPolicy) => {
+  const v = evaluateSla(e, sla);
+  return `contain ${v.contain}${v.ttcMinutes !== null ? ` (${formatMinutes(v.ttcMinutes)})` : ''} · resolve ${v.resolve}${v.ttrMinutes !== null ? ` (${formatMinutes(v.ttrMinutes)})` : ''}`;
+};
+const lifecycleLine = (e: ShiftEvent) => [
+  e.occurredAt && `first activity ${fmt(e.occurredAt)}`,
+  `detected ${fmt(e.timestamp)}`,
+  e.containedAt && `contained ${fmt(e.containedAt)}`,
+  e.resolvedAt && `resolved ${fmt(e.resolvedAt)}`,
+].filter(Boolean).join(' · ');
+const markers = (e: ShiftEvent) => [
+  e.carriedFromReportId && `carried over from ${e.carriedFromReportId}`,
+  e.escalatedIncidentId && `escalated to incident ${e.escalatedIncidentId} by ${e.escalatedBy}`,
+].filter(Boolean).join(' · ');
+const ackLine = (a?: HandoverAck) => a
+  ? `Acknowledged by ${a.acknowledgedBy} on ${fmt(a.acknowledgedAt)} (incoming ${a.incomingDate} ${a.incomingShift})${a.comment ? ` — "${a.comment}"` : ''}`
+  : 'Not yet acknowledged by the incoming shift';
 
 export const PLATFORM_NAME = 'G-Eyes SR';
 
@@ -41,9 +63,10 @@ const sevCounts = (r: ShiftReport) => {
 // ---------------------------------------------------------------------------
 const mdEscapeCell = (v: string) => (v || '—').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 
-export const reportToMarkdown = (r: ShiftReport, opts: ReportExportOptions): string => {
+export const reportToMarkdown = (r: ShiftReport, opts: ReportExportOptions, ctx: ExportContext = {}): string => {
   const shift = getShift(r.shift);
-  const m = computeMetrics([r], null);
+  const sla = ctx.sla ?? DEFAULT_SLA;
+  const m = computeMetrics([r], null, sla);
   const out: string[] = [];
   out.push(`> **${opts.classification}** — ${opts.organization}`, '');
   sections(opts, 'header').forEach(s => out.push(`**${s.heading}**`, '', s.content, ''));
@@ -61,7 +84,9 @@ export const reportToMarkdown = (r: ShiftReport, opts: ReportExportOptions): str
 
   if (opts.includeAnalytics) {
     out.push('## Threat Metrics', '',
-      `- **Total events:** ${m.totalEvents}`,
+      `- **New events:** ${m.totalEvents}${m.carriedEvents ? ` (+${m.carriedEvents} carried over)` : ''}`,
+      `- **Open items at report time:** ${r.events.filter(isOpenItem).length}`,
+      `- **SLA compliance:** ${m.sla.compliancePct === null ? 'n/a' : m.sla.compliancePct + '%'} · MTTC ${formatMinutes(m.sla.mttcMinutes)} · MTTR ${formatMinutes(m.sla.mttrMinutes)}`,
       `- **Criticality index (High + Critical):** ${m.criticalityIndex}%`,
       `- **Severity:** ${SEVERITIES.map(s => `${s} ${m.bySeverity[s]}`).join(' · ')}`,
       `- **Top attack vector:** ${m.topAttackTypes[0]?.name ?? '—'}`,
@@ -73,16 +98,18 @@ export const reportToMarkdown = (r: ShiftReport, opts: ReportExportOptions): str
   out.push('## Event Log', '');
   if (r.events.length === 0) out.push('_No events recorded during this shift._', '');
   else {
-    out.push('| Time | Severity | Event | Attack Type | Source IP | Destination IP | Port |', '|---|---|---|---|---|---|---|');
-    r.events.forEach(e => out.push(`| ${fmtTime(e.timestamp)} | ${e.severity} | ${mdEscapeCell(e.eventName)} | ${mdEscapeCell(e.attackType)} | ${mdEscapeCell(e.sourceIp)} | ${mdEscapeCell(e.destinationIp)} | ${mdEscapeCell(e.port)} |`));
+    out.push('| Time | Severity | Status | Event | Attack Type | Source IP | Destination IP | Port |', '|---|---|---|---|---|---|---|---|');
+    r.events.forEach(e => out.push(`| ${fmtTime(e.timestamp)} | ${e.severity} | ${eventStatus(e)} | ${mdEscapeCell(e.eventName)}${e.carriedFromReportId ? ' ↪' : ''} | ${mdEscapeCell(e.attackType)} | ${mdEscapeCell(e.sourceIp)} | ${mdEscapeCell(e.destinationIp)} | ${mdEscapeCell(e.port)} |`));
+    if (r.events.some(e => e.carriedFromReportId)) out.push('', '_↪ carried over from a previous shift_');
     out.push('');
   }
 
   if (opts.includeEventDetails && r.events.length) {
     out.push('## Investigation & Remediation Details', '');
     r.events.forEach((e, i) => {
-      out.push(`### ${i + 1}. ${e.eventName} — ${e.severity}`, '',
-        `*${fmt(e.timestamp)} · logged by ${e.loggedBy} · ${e.sourceIp || '?'} → ${e.destinationIp || '?'}${e.port ? `:${e.port}` : ''}${e.protocol ? ` (${e.protocol})` : ''}*`, '');
+      out.push(`### ${i + 1}. ${e.eventName} — ${e.severity} · ${eventStatus(e)}`, '',
+        `*logged by ${e.loggedBy} · ${e.sourceIp || '?'} → ${e.destinationIp || '?'}${e.port ? `:${e.port}` : ''}${e.protocol ? ` (${e.protocol})` : ''}*`, '',
+        `- Lifecycle: ${lifecycleLine(e)}`, `- SLA: ${slaLine(e, sla)}`, ...(markers(e) ? [`- ${markers(e)}`] : []), '');
       if (e.investigation) out.push('**Investigation / Forensic Findings**', '', e.investigation, '');
       if (e.remediation) out.push('**Remediation**', '', e.remediation, '');
       if (e.conclusion) out.push('**SOC Conclusion**', '', e.conclusion, '');
@@ -91,6 +118,7 @@ export const reportToMarkdown = (r: ShiftReport, opts: ReportExportOptions): str
 
   sections(opts, 'body').forEach(s => out.push(`## ${s.heading}`, '', s.content, ''));
   if (r.handoverNotes) out.push('## Shift Handover Notes', '', r.handoverNotes, '');
+  if (r.status === 'finalized') out.push('## Handover Sign-off', '', ackLine(ctx.ack), '');
   if (opts.includeIntegrity) {
     out.push('## Record Integrity', '',
       r.integrityHash ? `SHA-256: \`${r.integrityHash}\`` : '_Draft record — not sealed. Content may still change._', '');
@@ -128,9 +156,10 @@ footer{padding:16px 36px;border-top:1px solid #e4e4e7;font-size:11px;color:#7171
 @media print{body{background:#fff;padding:0}.doc{border:none}}
 `;
 
-export const reportToHtml = (r: ShiftReport, opts: ReportExportOptions): string => {
+export const reportToHtml = (r: ShiftReport, opts: ReportExportOptions, ctx: ExportContext = {}): string => {
   const shift = getShift(r.shift);
-  const m = computeMetrics([r], null);
+  const sla = ctx.sla ?? DEFAULT_SLA;
+  const m = computeMetrics([r], null, sla);
   const custom = (pos: CustomSection['position']) => sections(opts, pos)
     .map(s => `<div class="custom"><h3>${escapeHtml(s.heading)}</h3><p>${para(s.content)}</p></div>`).join('');
   const sevBadge = (s: Severity) => `<span class="sev" style="background:${SEV_HTML[s]}">${s}</span>`;
@@ -148,21 +177,24 @@ export const reportToHtml = (r: ShiftReport, opts: ReportExportOptions): string 
 <tr><td>Contributors</td><td>${escapeHtml((r.contributors || []).join(', '))}</td></tr>
 <tr><td>Prepared by</td><td>${escapeHtml(opts.preparedBy)}</td></tr></table>
 ${opts.includeAnalytics ? `<h2>Threat Metrics</h2><div class="kpis">
-<div class="kpi"><span>Total events</span><b>${m.totalEvents}</b></div>
+<div class="kpi"><span>New events</span><b>${m.totalEvents}</b>${m.carriedEvents ? `<span>+${m.carriedEvents} carried</span>` : ''}</div>
+<div class="kpi"><span>SLA compliance</span><b>${m.sla.compliancePct === null ? '—' : m.sla.compliancePct + '%'}</b><span>MTTC ${formatMinutes(m.sla.mttcMinutes)} · MTTR ${formatMinutes(m.sla.mttrMinutes)}</span></div>
 <div class="kpi"><span>Criticality index</span><b>${m.criticalityIndex}%</b></div>
 <div class="kpi"><span>Top attack vector</span><b style="font-size:15px">${escapeHtml(m.topAttackTypes[0]?.name ?? '—')}</b></div>
 <div class="kpi"><span>Primary hostile IP</span><b style="font-size:15px">${escapeHtml(m.topSourceIps[0]?.name ?? '—')}</b></div></div>
 <p class="muted">${SEVERITIES.map(s => `${sevBadge(s)} ${m.bySeverity[s]}`).join(' &nbsp; ')}</p>` : ''}
 ${r.summary ? `<h2>Shift Summary</h2><p>${para(r.summary)}</p>` : ''}
-<h2>Event Log</h2>${r.events.length === 0 ? '<p class="muted">No events recorded during this shift.</p>' : `<table><tr><th>Time</th><th>Severity</th><th>Event</th><th>Attack type</th><th>Source IP</th><th>Destination IP</th><th>Port</th></tr>
-${r.events.map(e => `<tr><td>${fmtTime(e.timestamp)}</td><td>${sevBadge(e.severity)}</td><td>${escapeHtml(e.eventName)}</td><td>${escapeHtml(e.attackType)}</td><td><code>${escapeHtml(e.sourceIp)}</code></td><td><code>${escapeHtml(e.destinationIp)}</code></td><td>${escapeHtml(e.port)}</td></tr>`).join('')}</table>`}
+<h2>Event Log</h2>${r.events.length === 0 ? '<p class="muted">No events recorded during this shift.</p>' : `<table><tr><th>Time</th><th>Severity</th><th>Status</th><th>Event</th><th>Attack type</th><th>Source IP</th><th>Destination IP</th><th>Port</th></tr>
+${r.events.map(e => `<tr><td>${fmtTime(e.timestamp)}</td><td>${sevBadge(e.severity)}</td><td>${escapeHtml(eventStatus(e))}</td><td>${escapeHtml(e.eventName)}${e.carriedFromReportId ? ' <span class="muted">↪ carried</span>' : ''}${e.escalatedIncidentId ? ' <span class="muted">⚑ incident</span>' : ''}</td><td>${escapeHtml(e.attackType)}</td><td><code>${escapeHtml(e.sourceIp)}</code></td><td><code>${escapeHtml(e.destinationIp)}</code></td><td>${escapeHtml(e.port)}</td></tr>`).join('')}</table>`}
 ${opts.includeEventDetails && r.events.length ? `<h2>Investigation &amp; Remediation Details</h2>${r.events.map((e, i) => `<div class="ev"><h3>${i + 1}. ${escapeHtml(e.eventName)} ${sevBadge(e.severity)}</h3>
-<p class="muted">${escapeHtml(fmt(e.timestamp))} · logged by ${escapeHtml(e.loggedBy)} · ${escapeHtml(e.sourceIp || '?')} → ${escapeHtml(e.destinationIp || '?')}${e.port ? ':' + escapeHtml(e.port) : ''} ${escapeHtml(e.protocol || '')}</p>
+<p class="muted">${escapeHtml(eventStatus(e))} · logged by ${escapeHtml(e.loggedBy)} · ${escapeHtml(e.sourceIp || '?')} → ${escapeHtml(e.destinationIp || '?')}${e.port ? ':' + escapeHtml(e.port) : ''} ${escapeHtml(e.protocol || '')}</p>
+<p class="muted">${escapeHtml(lifecycleLine(e))}<br/>SLA: ${escapeHtml(slaLine(e, sla))}${markers(e) ? '<br/>' + escapeHtml(markers(e)) : ''}</p>
 ${e.investigation ? `<p><b>Investigation / Forensic Findings</b><br/>${para(e.investigation)}</p>` : ''}
 ${e.remediation ? `<p><b>Remediation</b><br/>${para(e.remediation)}</p>` : ''}
 ${e.conclusion ? `<p><b>SOC Conclusion</b><br/>${para(e.conclusion)}</p>` : ''}</div>`).join('')}` : ''}
 ${custom('body')}
 ${r.handoverNotes ? `<h2>Shift Handover Notes</h2><p>${para(r.handoverNotes)}</p>` : ''}
+${r.status === 'finalized' ? `<h2>Handover Sign-off</h2><p>${escapeHtml(ackLine(ctx.ack))}</p>` : ''}
 ${opts.includeIntegrity ? `<h2>Record Integrity</h2>${r.integrityHash ? `<div class="hash">SHA-256: ${escapeHtml(r.integrityHash)}</div>` : '<p class="muted">Draft record — not sealed. Content may still change.</p>'}` : ''}
 ${custom('footer')}
 </div><footer><span>${escapeHtml(opts.classification)} — ${PLATFORM_NAME}</span><span>Generated ${escapeHtml(new Date().toLocaleString())}</span></footer></div></body></html>`;
@@ -171,14 +203,17 @@ ${custom('footer')}
 // ---------------------------------------------------------------------------
 // JSON (SIEM / backup)
 // ---------------------------------------------------------------------------
-export const reportToJson = (r: ShiftReport, opts: ReportExportOptions): string =>
+export const reportToJson = (r: ShiftReport, opts: ReportExportOptions, ctx: ExportContext = {}): string =>
   JSON.stringify({
-    schema: 'geyes.shift_report.v1',
+    schema: 'geyes.shift_report.v2',
+    handoverAck: ctx.ack ?? null,
+    slaPolicy: ctx.sla ?? DEFAULT_SLA,
+    slaEvaluation: r.events.map(e => ({ eventId: e.id, rootEventId: e.rootEventId ?? e.id, ...evaluateSla(e, ctx.sla ?? DEFAULT_SLA) })),
     exportedAt: new Date().toISOString(),
     exportedBy: opts.preparedBy,
     classification: opts.classification,
     report: r,
-    metrics: computeMetrics([r], null),
+    metrics: computeMetrics([r], null, ctx.sla ?? DEFAULT_SLA),
     customSections: opts.customSections,
   }, null, 2);
 
@@ -187,7 +222,8 @@ export const reportToJson = (r: ShiftReport, opts: ReportExportOptions): string 
 // ---------------------------------------------------------------------------
 const SEV_RGB: Record<Severity, [number, number, number]> = { Critical: [220, 38, 38], High: [234, 88, 12], Medium: [202, 138, 4], Low: [5, 150, 105] };
 
-export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => {
+export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions, ctx: ExportContext = {}): Blob => {
+  const sla = ctx.sla ?? DEFAULT_SLA;
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
   const W = pdf.internal.pageSize.getWidth();
   const H = pdf.internal.pageSize.getHeight();
@@ -196,7 +232,7 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
   const BOTTOM = H - 56;
   let y = M;
   const shift = getShift(r.shift);
-  const m = computeMetrics([r], null);
+  const m = computeMetrics([r], null, sla);
 
   const ensure = (h: number) => { if (y + h > BOTTOM) { pdf.addPage(); y = M; } };
   const text = (t: string, size = 10, style: 'normal' | 'bold' | 'italic' = 'normal', color: [number, number, number] = [24, 24, 27], indent = 0) => {
@@ -243,7 +279,9 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
 
   if (opts.includeAnalytics) {
     heading('Threat Metrics');
-    kv('Total events', String(m.totalEvents));
+    kv('New events', `${m.totalEvents}${m.carriedEvents ? ` (+${m.carriedEvents} carried over)` : ''}`);
+    kv('Open items', String(r.events.filter(isOpenItem).length));
+    kv('SLA compliance', `${m.sla.compliancePct === null ? 'n/a' : m.sla.compliancePct + '%'}   MTTC ${formatMinutes(m.sla.mttcMinutes)}   MTTR ${formatMinutes(m.sla.mttrMinutes)}`);
     kv('Criticality index', `${m.criticalityIndex}% (High + Critical)`);
     kv('Severity', SEVERITIES.map(s => `${s}: ${m.bySeverity[s]}`).join('   '));
     kv('Top attack vector', m.topAttackTypes[0] ? `${m.topAttackTypes[0].name} (${m.topAttackTypes[0].count})` : '—');
@@ -264,7 +302,7 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
   heading('Event Log');
   if (!r.events.length) text('No events recorded during this shift.', 10, 'italic', [113, 113, 122]);
   else {
-    const cols = [{ h: 'Time', w: 44 }, { h: 'Severity', w: 56 }, { h: 'Event', w: 140 }, { h: 'Source IP', w: 92 }, { h: 'Destination IP', w: 92 }, { h: 'Port', w: CW - 424 }];
+    const cols = [{ h: 'Time', w: 42 }, { h: 'Severity', w: 50 }, { h: 'Status', w: 58 }, { h: 'Event', w: 124 }, { h: 'Source IP', w: 84 }, { h: 'Destination IP', w: 84 }, { h: 'Port', w: CW - 442 }];
     const row = (vals: string[], bold: boolean, sev?: Severity) => {
       pdf.setFont('helvetica', bold ? 'bold' : 'normal'); pdf.setFontSize(8.5);
       const wrapped = vals.map((v, i) => pdf.splitTextToSize(v || '—', cols[i].w - 6) as string[]);
@@ -281,7 +319,7 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
       y += h;
     };
     row(cols.map(c => c.h), true);
-    r.events.forEach(e => row([fmtTime(e.timestamp), e.severity, e.eventName, e.sourceIp, e.destinationIp, e.port], false, e.severity));
+    r.events.forEach(e => row([fmtTime(e.timestamp), e.severity, eventStatus(e), e.eventName + (e.carriedFromReportId ? ' (carried)' : ''), e.sourceIp, e.destinationIp, e.port], false, e.severity));
   }
 
   if (opts.includeEventDetails && r.events.length) {
@@ -289,7 +327,10 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
     r.events.forEach((e, i) => {
       ensure(40); y += 4;
       text(`${i + 1}. ${e.eventName} — ${e.severity}`, 11, 'bold', SEV_RGB[e.severity]);
-      text(`${fmt(e.timestamp)} · ${e.attackType || 'Unclassified'} · logged by ${e.loggedBy} · ${e.sourceIp || '?'} -> ${e.destinationIp || '?'}${e.port ? ':' + e.port : ''} ${e.protocol || ''}`, 8.5, 'italic', [113, 113, 122]);
+      text(`${eventStatus(e)} · ${e.attackType || 'Unclassified'} · logged by ${e.loggedBy} · ${e.sourceIp || '?'} -> ${e.destinationIp || '?'}${e.port ? ':' + e.port : ''} ${e.protocol || ''}`, 8.5, 'italic', [113, 113, 122]);
+      text(lifecycleLine(e), 8.5, 'normal', [82, 82, 91], 8);
+      text(`SLA: ${slaLine(e, sla)}`, 8.5, 'normal', [82, 82, 91], 8);
+      if (markers(e)) text(markers(e), 8.5, 'normal', [109, 40, 217], 8);
       if (e.investigation) { text('Investigation / Forensic Findings', 9, 'bold', [63, 63, 70], 8); text(e.investigation, 9.5, 'normal', [24, 24, 27], 8); }
       if (e.remediation) { text('Remediation', 9, 'bold', [63, 63, 70], 8); text(e.remediation, 9.5, 'normal', [24, 24, 27], 8); }
       if (e.conclusion) { text('SOC Conclusion', 9, 'bold', [63, 63, 70], 8); text(e.conclusion, 9.5, 'normal', [24, 24, 27], 8); }
@@ -298,6 +339,7 @@ export const reportToPdf = (r: ShiftReport, opts: ReportExportOptions): Blob => 
 
   custom('body');
   if (r.handoverNotes) { heading('Shift Handover Notes'); text(r.handoverNotes); }
+  if (r.status === 'finalized') { heading('Handover Sign-off'); text(ackLine(ctx.ack)); }
   if (opts.includeIntegrity) {
     heading('Record Integrity');
     if (r.integrityHash) { text('SHA-256', 9, 'bold'); pdf.setFont('courier', 'normal'); text(r.integrityHash, 9, 'normal'); }
@@ -324,10 +366,10 @@ const MIME: Record<ExportFormat, string> = {
   pdf: 'application/pdf', html: 'text/html', md: 'text/markdown', json: 'application/json',
 };
 
-export const renderReport = (r: ShiftReport, format: ExportFormat, opts: ReportExportOptions): { blob: Blob; filename: string } => {
+export const renderReport = (r: ShiftReport, format: ExportFormat, opts: ReportExportOptions, ctx: ExportContext = {}): { blob: Blob; filename: string } => {
   const filename = `${fileBase(r)}.${format}`;
-  if (format === 'pdf') return { blob: reportToPdf(r, opts), filename };
-  const body = format === 'html' ? reportToHtml(r, opts) : format === 'md' ? reportToMarkdown(r, opts) : reportToJson(r, opts);
+  if (format === 'pdf') return { blob: reportToPdf(r, opts, ctx), filename };
+  const body = format === 'html' ? reportToHtml(r, opts, ctx) : format === 'md' ? reportToMarkdown(r, opts, ctx) : reportToJson(r, opts, ctx);
   return { blob: new Blob([body], { type: `${MIME[format]};charset=utf-8` }), filename };
 };
 
@@ -339,18 +381,19 @@ export const downloadBlob = (blob: Blob, filename: string) => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
-export const comparativeMarkdown = (reports: ShiftReport[]): string => {
-  const rows = reports.map(r => ({ r, m: computeMetrics([r], null) }));
-  const all = computeMetrics(reports, null);
+export const comparativeMarkdown = (reports: ShiftReport[], sla: SlaPolicy = DEFAULT_SLA): string => {
+  const rows = reports.map(r => ({ r, m: computeMetrics([r], null, sla) }));
+  const all = computeMetrics(reports, null, sla);
   const out = [
     `# Comparative Multi-Report Analysis`, '',
     `_${reports.length} reports · generated ${new Date().toLocaleString()} by ${PLATFORM_NAME}_`, '',
-    '| Report | Shift | Status | Events | Critical | High | Medium | Low | Criticality | Top vector | Top hostile IP |',
-    '|---|---|---|---|---|---|---|---|---|---|---|',
-    ...rows.map(({ r, m }) => `| ${r.date} | ${getShift(r.shift).label} | ${r.status} | ${m.totalEvents} | ${m.bySeverity.Critical} | ${m.bySeverity.High} | ${m.bySeverity.Medium} | ${m.bySeverity.Low} | ${m.criticalityIndex}% | ${mdEscapeCell(m.topAttackTypes[0]?.name ?? '—')} | ${m.topSourceIps[0]?.name ?? '—'} |`),
+    '| Report | Shift | Status | Events | Critical | High | Medium | Low | Criticality | SLA compliance | Top vector | Top hostile IP |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|',
+    ...rows.map(({ r, m }) => `| ${r.date} | ${getShift(r.shift).label} | ${r.status} | ${m.totalEvents} | ${m.bySeverity.Critical} | ${m.bySeverity.High} | ${m.bySeverity.Medium} | ${m.bySeverity.Low} | ${m.criticalityIndex}% | ${m.sla.compliancePct === null ? 'n/a' : m.sla.compliancePct + '%'} | ${mdEscapeCell(m.topAttackTypes[0]?.name ?? '—')} | ${m.topSourceIps[0]?.name ?? '—'} |`),
     '', '## Aggregate', '',
     `- Total events: **${all.totalEvents}**`,
     `- Aggregate criticality index: **${all.criticalityIndex}%**`,
+    `- SLA compliance: **${all.sla.compliancePct === null ? 'n/a' : all.sla.compliancePct + '%'}** · MTTC ${formatMinutes(all.sla.mttcMinutes)} · MTTR ${formatMinutes(all.sla.mttrMinutes)}`,
     `- Top attack vectors: ${all.topAttackTypes.slice(0, 5).map(a => `${a.name} (${a.count})`).join(', ') || '—'}`,
     `- Top hostile IPs: ${all.topSourceIps.slice(0, 5).map(a => `${a.name} (${a.count})`).join(', ') || '—'}`,
   ];
@@ -358,12 +401,15 @@ export const comparativeMarkdown = (reports: ShiftReport[]): string => {
 };
 
 /** Batch export as a ZIP with a SHA-256 manifest for chain-of-custody. */
-export const exportZip = async (reports: ShiftReport[], formats: ExportFormat[], opts: ReportExportOptions, withComparison = true): Promise<Blob> => {
+export const exportZip = async (
+  reports: ShiftReport[], formats: ExportFormat[], opts: ReportExportOptions, withComparison = true,
+  ctx: { acks?: HandoverAck[]; sla?: SlaPolicy } = {}
+): Promise<Blob> => {
   const zip = new JSZip();
   const manifest: { file: string; sha256: string; reportId?: string; reportHash?: string }[] = [];
   for (const r of reports) {
     for (const f of formats) {
-      const { blob, filename } = renderReport(r, f, { ...opts, title: opts.title && reports.length === 1 ? opts.title : '' });
+      const { blob, filename } = renderReport(r, f, { ...opts, title: opts.title && reports.length === 1 ? opts.title : '' }, { sla: ctx.sla, ack: ctx.acks?.find(a => a.reportId === r.id) });
       const buf = await blob.arrayBuffer();
       const path = `${f}/${filename}`;
       zip.file(path, buf);
@@ -372,7 +418,7 @@ export const exportZip = async (reports: ShiftReport[], formats: ExportFormat[],
     }
   }
   if (withComparison && reports.length > 1) {
-    const md = comparativeMarkdown(reports);
+    const md = comparativeMarkdown(reports, ctx.sla);
     zip.file('comparative_analysis.md', md);
     manifest.push({ file: 'comparative_analysis.md', sha256: await sha256(md) });
   }

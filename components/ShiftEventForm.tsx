@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, Crosshair, AlertCircle } from 'lucide-react';
-import { Severity, ShiftEvent, User } from '../types';
+import { EventStatus, Severity, ShiftEvent, SlaPolicy, User } from '../types';
+import { DEFAULT_SLA, EVENT_STATUSES, EVENT_STATUS_STYLE, evaluateSla, formatMinutes } from '../lib/sla';
+import { useT } from '../i18n';
 import { ATTACK_TYPES, SEVERITIES, SEVERITY_STYLE } from '../services/analytics';
 import { isValidIp, isValidPort } from '../services/shiftReportService';
 
@@ -8,6 +10,7 @@ interface Props {
   event: ShiftEvent | null;
   currentUser: User;
   defaultDate: string; // YYYY-MM-DD of the report
+  sla?: SlaPolicy;
   onSave: (event: ShiftEvent) => Promise<void> | void;
   onCancel: () => void;
 }
@@ -18,7 +21,10 @@ const toLocalInput = (iso: string) => {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const ShiftEventForm: React.FC<Props> = ({ event, currentUser, defaultDate, onSave, onCancel }) => {
+const optIso = (local: string) => (local ? new Date(local).toISOString() : undefined);
+
+const ShiftEventForm: React.FC<Props> = ({ event, currentUser, defaultDate, sla = DEFAULT_SLA, onSave, onCancel }) => {
+  const t = useT();
   const now = new Date();
   const initialTs = event?.timestamp ?? (defaultDate === toLocalInput(now.toISOString()).slice(0, 10) ? now.toISOString() : new Date(`${defaultDate}T00:00`).toISOString());
   const [form, setForm] = useState({
@@ -33,10 +39,29 @@ const ShiftEventForm: React.FC<Props> = ({ event, currentUser, defaultDate, onSa
     investigation: event?.investigation ?? '',
     remediation: event?.remediation ?? '',
     conclusion: event?.conclusion ?? '',
+    status: (event?.status ?? 'Open') as EventStatus,
+    occurredAt: event?.occurredAt ? toLocalInput(event.occurredAt) : '',
+    containedAt: event?.containedAt ? toLocalInput(event.containedAt) : '',
+    resolvedAt: event?.resolvedAt ? toLocalInput(event.resolvedAt) : '',
   });
   const [errors, setErrors] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form, v: string) => setForm(f => ({ ...f, [k]: v }));
+  const nowLocal = () => toLocalInput(new Date().toISOString());
+
+  /** Status changes stamp lifecycle times automatically (editable afterwards). */
+  const setStatus = (st: EventStatus) => setForm(f => {
+    const next = { ...f, status: st };
+    if ((st === 'Contained' || st === 'Resolved') && !f.containedAt) next.containedAt = nowLocal();
+    if (st === 'Resolved' && !f.resolvedAt) next.resolvedAt = nowLocal();
+    if (st === 'Open') { next.containedAt = ''; next.resolvedAt = ''; }
+    if (st === 'Contained') next.resolvedAt = '';
+    return next;
+  });
+
+  const preview = form.timestamp && !isNaN(new Date(form.timestamp).getTime())
+    ? evaluateSla({ severity: form.severity, timestamp: new Date(form.timestamp).toISOString(), status: form.status, containedAt: optIso(form.containedAt), resolvedAt: optIso(form.resolvedAt), occurredAt: optIso(form.occurredAt) } as ShiftEvent, sla)
+    : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,15 +71,33 @@ const ShiftEventForm: React.FC<Props> = ({ event, currentUser, defaultDate, onSa
     if (!isValidIp(form.sourceIp)) errs.push('Source IP is not a valid IPv4/IPv6 address');
     if (!isValidIp(form.destinationIp)) errs.push('Destination IP is not a valid IPv4/IPv6 address');
     if (!isValidPort(form.port)) errs.push('Port must be 0-65535 (lists and ranges allowed, e.g. 80,443 or 1000-2000)');
+    const det = new Date(form.timestamp).getTime();
+    if (form.occurredAt && new Date(form.occurredAt).getTime() > det) errs.push('First activity time cannot be after detection');
+    if (form.containedAt && new Date(form.containedAt).getTime() < det) errs.push('Containment time cannot be before detection');
+    if (form.resolvedAt && new Date(form.resolvedAt).getTime() < det) errs.push('Resolution time cannot be before detection');
+    if (form.containedAt && form.resolvedAt && new Date(form.resolvedAt) < new Date(form.containedAt)) errs.push('Resolution time cannot be before containment');
+    if (form.status === 'Resolved' && !form.resolvedAt) errs.push('Resolved events need a resolution time');
+    if (form.status === 'Contained' && !form.containedAt) errs.push('Contained events need a containment time');
+    if (new Date(form.timestamp).getTime() > Date.now() + 5 * 60_000) errs.push('Detection time cannot be in the future');
     setErrors(errs);
     if (errs.length) return;
     const ts = new Date().toISOString();
     setBusy(true);
     try {
+      const id = event?.id ?? crypto.randomUUID();
       await onSave({
-        id: event?.id ?? crypto.randomUUID(),
         ...form,
+        id,
         eventName: form.eventName.trim(),
+        occurredAt: optIso(form.occurredAt),
+        containedAt: optIso(form.containedAt),
+        resolvedAt: optIso(form.resolvedAt),
+        rootEventId: event?.rootEventId ?? id,
+        carriedFromReportId: event?.carriedFromReportId,
+        carriedFromEventId: event?.carriedFromEventId,
+        escalatedIncidentId: event?.escalatedIncidentId,
+        escalatedAt: event?.escalatedAt,
+        escalatedBy: event?.escalatedBy,
         sourceIp: form.sourceIp.trim(),
         destinationIp: form.destinationIp.trim(),
         port: form.port.trim(),
@@ -113,6 +156,30 @@ const ShiftEventForm: React.FC<Props> = ({ event, currentUser, defaultDate, onSa
                 </label>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="rounded-2xl border border-zinc-800 p-4 space-y-3">
+            <legend className={`${label} px-1`}>{t('Lifecycle & response times')}</legend>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('Status')}>
+              {EVENT_STATUSES.map(st => (
+                <button type="button" key={st} role="radio" aria-checked={form.status === st} onClick={() => setStatus(st)}
+                  className={`px-3 py-1.5 rounded-lg border text-xs font-bold ${form.status === st ? EVENT_STATUS_STYLE[st] + ' ring-1 ring-current' : 'border-zinc-800 text-zinc-500'}`}>{t(st)}</button>
+              ))}
+            </div>
+            <div className="grid md:grid-cols-3 gap-3">
+              <label className="space-y-1"><span className={label}>{t('First activity (optional)')}</span>
+                <input type="datetime-local" value={form.occurredAt} onChange={e => set('occurredAt', e.target.value)} className={input} /></label>
+              <label className="space-y-1"><span className={label}>{t('Contained at')}</span>
+                <input type="datetime-local" value={form.containedAt} onChange={e => set('containedAt', e.target.value)} className={input} /></label>
+              <label className="space-y-1"><span className={label}>{t('Resolved at')}</span>
+                <input type="datetime-local" value={form.resolvedAt} onChange={e => set('resolvedAt', e.target.value)} className={input} /></label>
+            </div>
+            {preview && (
+              <p className="text-[11px] text-zinc-400">
+                {t('SLA ({sev}): contain by {c} · resolve by {r}', { sev: t(form.severity), c: new Date(preview.containDueAt).toLocaleString(), r: new Date(preview.resolveDueAt).toLocaleString() })}
+                {preview.ttdMinutes !== null && <> · {t('time to detect')} <b>{formatMinutes(preview.ttdMinutes)}</b></>}
+              </p>
+            )}
           </fieldset>
 
           <label className="block space-y-1"><span className={label}>Investigation / forensic findings</span>

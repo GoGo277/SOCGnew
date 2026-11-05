@@ -1,11 +1,16 @@
 import React, { useMemo, useState } from 'react';
-import { X, FileDown, FileText, FileCode, FileJson, File as FileIcon, Plus, Trash2, Archive, Eye, EyeOff } from 'lucide-react';
-import { CustomSection, ExportFormat, ReportExportOptions, ShiftReport, User } from '../types';
+import { X, FileDown, FileText, FileCode, FileJson, File as FileIcon, Plus, Trash2, Archive, Eye, EyeOff, BookmarkPlus, LayoutTemplate } from 'lucide-react';
+import { CustomSection, ExportFormat, HandoverAck, ReportExportOptions, ReportTemplate, ShiftReport, SlaPolicy, User } from '../types';
+import { templateService } from '../services/templateService';
+import { useT } from '../i18n';
 import { defaultExportOptions, renderReport, downloadBlob, exportZip, reportToHtml } from '../services/reportExport';
 import { auditService } from '../services/auditService';
 
 interface Props {
   reports: ShiftReport[];
+  acks?: HandoverAck[];
+  templates?: ReportTemplate[];
+  sla?: SlaPolicy;
   currentUser: User;
   onClose: () => void;
   onDone: (msg: string) => void;
@@ -18,8 +23,12 @@ const FORMATS: { id: ExportFormat; label: string; desc: string; icon: React.Elem
   { id: 'json', label: 'JSON data', desc: 'SIEM integration / backup', icon: FileJson },
 ];
 
-const ReportCustomizer: React.FC<Props> = ({ reports, currentUser, onClose, onDone }) => {
+const ReportCustomizer: React.FC<Props> = ({ reports, acks = [], templates = [], sla, currentUser, onClose, onDone }) => {
+  const t = useT();
   const single = reports.length === 1;
+  const ctxFor = (r: ShiftReport) => ({ sla, ack: acks.find(a => a.reportId === r.id) });
+  const [templateId, setTemplateId] = useState('');
+  const selectedTemplate = templates.find(x => x.id === templateId);
   const [opts, setOpts] = useState<ReportExportOptions>(() => defaultExportOptions(currentUser, single ? reports[0].title : ''));
   const [formats, setFormats] = useState<ExportFormat[]>(['pdf']);
   const [withComparison, setWithComparison] = useState(true);
@@ -39,7 +48,30 @@ const ReportCustomizer: React.FC<Props> = ({ reports, currentUser, onClose, onDo
     else setFormats(cur => (cur.includes(f) ? cur.filter(x => x !== f) : [...cur, f]));
   };
 
-  const previewHtml = useMemo(() => (preview && single ? reportToHtml(reports[0], opts) : ''), [preview, single, reports, opts]);
+  const previewHtml = useMemo(() => (preview && single ? reportToHtml(reports[0], opts, ctxFor(reports[0])) : ''), [preview, single, reports, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const applyTemplate = (id: string) => {
+    setTemplateId(id);
+    const tpl = templates.find(x => x.id === id);
+    if (tpl) setOpts(o => templateService.apply(tpl, o));
+  };
+
+  const saveTemplate = async () => {
+    const name = prompt(t('Template name'), selectedTemplate?.name ?? '');
+    if (!name) return;
+    const overwrite = selectedTemplate && selectedTemplate.name === name.trim() ? selectedTemplate : undefined;
+    try {
+      const tpl = await templateService.save(currentUser, name, overwrite?.description ?? '', opts, overwrite);
+      setTemplateId(tpl.id);
+      onDone(t('Template "{name}" saved', { name: tpl.name }));
+    } catch (e: any) { setError(e.message); }
+  };
+
+  const deleteTemplate = async () => {
+    if (!selectedTemplate || !confirm(t('Delete template "{name}"?', { name: selectedTemplate.name }))) return;
+    await templateService.remove(currentUser, selectedTemplate);
+    setTemplateId('');
+  };
 
   const run = async () => {
     setError('');
@@ -47,12 +79,12 @@ const ReportCustomizer: React.FC<Props> = ({ reports, currentUser, onClose, onDo
     setBusy(true);
     try {
       if (single && formats.length === 1) {
-        const { blob, filename } = renderReport(reports[0], formats[0], opts);
+        const { blob, filename } = renderReport(reports[0], formats[0], opts, ctxFor(reports[0]));
         downloadBlob(blob, filename);
-        auditService.log(currentUser, 'REPORT_EXPORTED', { id: reports[0].id, name: reports[0].title }, { format: formats[0], classification: opts.classification });
+        auditService.log(currentUser, 'REPORT_EXPORTED', { id: reports[0].id, name: reports[0].title }, { format: formats[0], classification: opts.classification, template: selectedTemplate?.name });
         onDone(`Exported ${filename}`);
       } else {
-        const blob = await exportZip(reports, formats, opts, withComparison);
+        const blob = await exportZip(reports, formats, opts, withComparison, { acks, sla });
         const filename = `GEYES_reports_${new Date().toISOString().slice(0, 10)}_${reports.length}x.zip`;
         downloadBlob(blob, filename);
         auditService.log(currentUser, 'REPORT_BATCH_EXPORTED', { id: 'batch', name: filename }, { reports: reports.map(r => r.id), formats, classification: opts.classification });
@@ -85,8 +117,19 @@ const ReportCustomizer: React.FC<Props> = ({ reports, currentUser, onClose, onDo
 
         <div className={`flex-1 overflow-hidden grid ${preview ? 'lg:grid-cols-2' : ''}`}>
           <div className="p-6 overflow-y-auto space-y-6">
+            <div className="flex flex-wrap items-end gap-2 p-3 rounded-xl border border-zinc-800 bg-zinc-950/40">
+              <label className="flex-1 min-w-[200px] space-y-1"><span className={label}><LayoutTemplate className="w-3 h-3 inline mr-1" />{t('Template')}</span>
+                <select aria-label={t('Template')} value={templateId} onChange={e => applyTemplate(e.target.value)} className={input}>
+                  <option value="">{t('— No template —')}</option>
+                  {templates.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select></label>
+              <button type="button" onClick={saveTemplate} className="px-3 py-2 rounded-xl border border-zinc-700 text-xs font-bold text-zinc-300 hover:text-white flex items-center gap-1.5"><BookmarkPlus className="w-4 h-4" /> {t('Save as template')}</button>
+              {selectedTemplate && (currentUser.role === 'Admin' || selectedTemplate.createdBy === currentUser.username) && (
+                <button type="button" aria-label={t('Delete template')} onClick={deleteTemplate} className="p-2 rounded-xl border border-zinc-800 text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+              )}
+            </div>
             <div>
-              <p className={`${label} mb-2`}>Format{single ? '' : 's'}</p>
+              <p className={`${label} mb-2`}>{single ? t('Format') : t('Formats')}</p>
               <div className="grid grid-cols-2 gap-2">
                 {FORMATS.map(f => (
                   <button key={f.id} type="button" onClick={() => toggleFormat(f.id)} className={`text-left p-3 rounded-xl border flex items-start gap-3 transition-all ${formats.includes(f.id) ? 'border-blue-500/60 bg-blue-500/10' : 'border-zinc-800 hover:border-zinc-700'}`}>

@@ -9,6 +9,8 @@ import {
   Layers, Key, Mail, UserCircle, Eye, X, Database, Download, FileJson, AlertTriangle, RotateCcw, Unlock, Ban, CheckCircle2
 } from 'lucide-react';
 import { getTranslator } from '../translations';
+import SocPolicySettings from './SocPolicySettings';
+import { Timer } from 'lucide-react';
 
 interface SettingsPageProps {
   settings: AppSettings;
@@ -21,7 +23,7 @@ interface SettingsPageProps {
 const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettingsUpdate, onUsersUpdate, currentUser }) => {
   const [userError, setUserError] = useState('');
   const t = useMemo(() => getTranslator(settings.language), [settings.language]);
-  const [activeSubTab, setActiveSubTab] = useState<'general' | 'users' | 'roles' | 'system'>('general');
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'users' | 'roles' | 'policy' | 'system'>('general');
   const [appName, setAppName] = useState(settings.appName);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
   const [currentLang, setCurrentLang] = useState<Language>(settings.language);
@@ -139,6 +141,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
           { id: 'general', label: t('settings'), icon: Settings },
           { id: 'users', label: t('all_members'), icon: Users },
           { id: 'roles', label: t('role_mgmt'), icon: Shield },
+          { id: 'policy', label: t('SOC Policy'), icon: Timer },
           { id: 'system', label: 'System Master', icon: Database },
         ].map((tab) => (
           <button
@@ -267,6 +270,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                  </div>
               )}
            </div>
+        )}
+
+        {activeSubTab === 'policy' && (
+          <SocPolicySettings settings={settings} currentUser={currentUser} onSaved={onSettingsUpdate} />
         )}
 
         {activeSubTab === 'system' && (
