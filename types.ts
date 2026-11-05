@@ -81,6 +81,10 @@ export interface User {
   disabled?: boolean;
   lastLoginAt?: string;
   createdBy?: string;
+  /** TOTP multi-factor (local mode stores the secret; cloud mode uses Firebase MFA). */
+  mfaSecret?: string;
+  mfaEnrolledAt?: string;
+  mfaLastStep?: number;
 }
 
 export interface Guideline {

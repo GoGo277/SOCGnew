@@ -42,6 +42,8 @@ import { swapService } from './services/swapService';
 import { scheduleService } from './services/scheduleService';
 import { realtimeStore } from './services/realtimeStore';
 import ReportCenter from './components/ReportCenter';
+import MfaSetupModal from './components/MfaSetupModal';
+import { cloudAuth } from './services/cloudAuth';
 import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
 import AuditLogPage from './components/AuditLogPage';
@@ -100,9 +102,18 @@ const App: React.FC = () => {
   const [reportSchedules, setReportSchedules] = useState<ReportSchedule[]>([]);
   const [reportArchive, setReportArchive] = useState<ArchivedReport[]>([]);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isMfaSetupOpen, setIsMfaSetupOpen] = useState(false);
 
   // Firestore real-time sync of the user registry & global settings.
   useEffect(() => settingsService.startCloudSync(), []);
+
+  // Cloud mode: the Firebase session is authoritative — drop the local session when it ends.
+  useEffect(() => {
+    if (!realtimeStore.isCloud()) return;
+    return cloudAuth.onChange(fb => {
+      if (!fb && settingsService.getActiveSession()) { settingsService.logout(); setCurrentUser(null); }
+    });
+  }, []);
 
   // Real-time listeners for G-Eyes SR operational collections.
   useEffect(() => {
@@ -617,7 +628,7 @@ const App: React.FC = () => {
 
   return (
     <I18nProvider lang={settings.language}>
-    <Layout onChangePassword={() => setIsChangePasswordOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
+    <Layout onChangePassword={() => setIsChangePasswordOpen(true)} onSetupMfa={() => setIsMfaSetupOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
       <NotificationCenter isOpen={isNotifCenterOpen} onClose={() => setIsNotifCenterOpen(false)} currentUser={currentUser} notifications={notifications} requests={requests} onUpdate={loadData} onOpenRequest={setSelectedRequest} language={settings.language} />
       {renderActiveTab()}
       {selectedRequest && <RequestDetailModal request={selectedRequest} isOpen={true} onClose={() => setSelectedRequest(null)} canApprove={permissions.canApproveRequests} onResolve={(st) => { requestService.resolveRequest(selectedRequest.id, currentUser, st); auditService.log(currentUser, 'REQUEST_RESOLVED', { id: selectedRequest.id, name: selectedRequest.action }, { status: st }); loadData(); setSelectedRequest(null); showToast(`Request ${st}`); }} language={settings.language} />}
@@ -631,6 +642,9 @@ const App: React.FC = () => {
       )}
       {isChangePasswordOpen && (
         <ForceChangePassword user={currentUser} forced={false} onComplete={() => { setIsChangePasswordOpen(false); showToast('Password updated'); }} onCancel={() => setIsChangePasswordOpen(false)} />
+      )}
+      {isMfaSetupOpen && (
+        <MfaSetupModal user={currentUser} onClose={() => setIsMfaSetupOpen(false)} onDone={() => { setIsMfaSetupOpen(false); setCurrentUser(settingsService.getActiveSession()); showToast('Two-step verification enabled'); }} />
       )}
       <Toast message={toast.message} isOpen={toast.isOpen} onClose={() => setToast(p => ({ ...p, isOpen: false }))} />
     </Layout>

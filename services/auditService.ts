@@ -2,6 +2,7 @@ import { User } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { realtimeStore } from './realtimeStore';
 import { sha256, canonicalJson } from '../lib/crypto';
+import { auth } from '../lib/firebase';
 
 export type AuditAction =
   | 'LOGIN' | 'LOGOUT' | 'LOGIN_FAILED' | 'ACCOUNT_LOCKED' | 'SESSION_EXPIRED'
@@ -46,7 +47,7 @@ const LOCAL_RETENTION = 5000;
 
 const hashableContent = (log: AuditLog) => {
   const { hash, ...rest } = log;
-  return canonicalJson(rest);
+  return canonicalJson(JSON.parse(JSON.stringify(rest)));
 };
 
 export const auditService = {
@@ -107,7 +108,9 @@ export const auditService = {
     }
     window.dispatchEvent(new Event('geyes-audit'));
 
-    if (realtimeStore.isCloud()) {
+    // Cloud: entries are written under the signed-in identity (rules enforce userId == uid).
+    // Pre-authentication events are recorded server-side by Cloud Functions.
+    if (realtimeStore.isCloud() && auth?.currentUser && auth.currentUser.uid === newLog.userId) {
       realtimeStore.set(AUDIT_COLLECTION, newLog).catch(err => console.error('Audit sync to Firestore failed', err));
     }
 

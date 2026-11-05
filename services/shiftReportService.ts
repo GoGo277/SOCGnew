@@ -4,20 +4,14 @@ import { isOpenItem } from '../lib/sla';
 import { shiftSortKey } from './analytics';
 import { realtimeStore } from './realtimeStore';
 import { auditService } from './auditService';
-import { sha256, canonicalJson } from '../lib/crypto';
+import { callFn } from './cloudAuth';
 
 export const REPORTS_COLLECTION = 'shift_reports';
 
 export const reportId = (date: string, shift: ShiftId) => `${date}_${shift}`;
 
-/** The content that is sealed by the integrity hash at finalisation. */
-const sealedContent = (r: ShiftReport) => canonicalJson({
-  id: r.id, date: r.date, shift: r.shift, title: r.title, events: r.events,
-  summary: r.summary, handoverNotes: r.handoverNotes, contributors: r.contributors,
-  createdBy: r.createdBy, createdAt: r.createdAt, finalizedAt: r.finalizedAt, finalizedBy: r.finalizedBy,
-});
-
-export const computeIntegrityHash = (r: ShiftReport) => sha256(sealedContent(r));
+export { computeIntegrityHash } from '../lib/integrity';
+import { computeIntegrityHash } from '../lib/integrity';
 
 const assertDraft = (r: ShiftReport) => {
   if (r.status === 'finalized') throw new Error('Report is finalized and immutable');
@@ -223,6 +217,11 @@ export const shiftReportService = {
   /** Seal the report: compute its SHA-256 integrity hash and lock it permanently. */
   async finalize(actor: User, report: ShiftReport): Promise<ShiftReport> {
     assertDraft(report);
+    if (realtimeStore.isCloud()) {
+      // Server-side sealing: the Cloud Function stamps the time and identity and computes the hash.
+      await realtimeStore.set(REPORTS_COLLECTION, { ...report, updatedAt: new Date().toISOString(), updatedBy: actor.username });
+      return callFn<{ reportId: string }, ShiftReport>('finalizeShiftReport', { reportId: report.id });
+    }
     const sealed: ShiftReport = {
       ...report,
       status: 'finalized',

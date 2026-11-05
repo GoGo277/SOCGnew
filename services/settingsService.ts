@@ -4,9 +4,15 @@ import { realtimeStore } from './realtimeStore';
 import { hashPassword, randomSalt, safeEqual, checkPasswordPolicy } from '../lib/crypto';
 import { auditService } from './auditService';
 import { DEFAULT_SLA } from '../lib/sla';
+import { generateTotpSecret, otpauthUri, verifyTotp } from '../lib/totp';
+import { cloudAuth, callFn } from './cloudAuth';
+import type { MultiFactorResolver, TotpSecret } from 'firebase/auth';
 
 const SETTINGS_KEY = 'soc_app_settings';
-const USERS_KEY = 'soc_app_users';
+const LOCAL_USERS_KEY = 'soc_app_users';
+const CLOUD_USERS_KEY = 'soc_app_users_cloud';
+/** Separate caches so local-mode bootstrap users never mix with the cloud directory. */
+const usersKey = () => (realtimeStore.isCloud() ? CLOUD_USERS_KEY : LOCAL_USERS_KEY);
 const SESSION_KEY = 'soc_active_session';
 const USERS_COLLECTION = 'users';
 
@@ -120,12 +126,38 @@ const buildDefaultUsers = (): User[] => [
 interface StoredSession extends User { sessionExpiresAt?: string }
 
 const stripSecrets = (u: User): User => {
-  const { password, passwordHash, passwordSalt, failedLoginAttempts, lockedUntil, ...rest } = u;
+  const { password, passwordHash, passwordSalt, failedLoginAttempts, lockedUntil, mfaSecret, mfaLastStep, ...rest } = u;
   return rest as User;
 };
 
+/** Result of a sign-in step. Sessions are only created on `ok`. */
+export type AuthResult =
+  | { status: 'ok'; user: User }
+  | { status: 'mfa_challenge' }
+  | { status: 'mfa_enroll'; secret: string; uri: string }
+  | { status: 'error'; error: string };
+
+type Pending =
+  | { kind: 'local_challenge'; userId: string; expires: number }
+  | { kind: 'local_enroll'; userId: string; secret: string; expires: number; self?: boolean }
+  | { kind: 'cloud_challenge'; resolver: MultiFactorResolver; login: string }
+  | { kind: 'cloud_enroll'; secret: TotpSecret; self?: boolean };
+
+let pending: Pending | null = null;
+const PENDING_TTL = 5 * 60_000;
+
+const establishSession = (u: User): User => {
+  const clean = stripSecrets(u);
+  const session: StoredSession = { ...clean, sessionExpiresAt: new Date(Date.now() + SESSION_TTL_HOURS * 3_600_000).toISOString() };
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  pending = null;
+  return clean;
+};
+
+const mfaRequiredFor = (u: User) => u.role === 'Admin' && settingsService.getSettings().requireAdminMfa !== false;
+
 const writeUsersCache = (users: User[]) => {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  localStorage.setItem(usersKey(), JSON.stringify(users));
 };
 
 const persistUser = async (user: User) => {
@@ -191,39 +223,42 @@ export const settingsService = {
     }
   },
 
-  /** Keep the local user & settings cache in sync with Firestore in real time. */
+  /**
+   * Keep the user directory & global settings cache in sync with Firestore.
+   * Listeners attach only while a Firebase user is signed in (rules require auth).
+   */
   startCloudSync: (): (() => void) => {
     if (!realtimeStore.isCloud() || userSyncUnsub) return () => {};
-    let seeded = false;
-    const unsubUsers = realtimeStore.subscribe<User & { id: string }>(USERS_COLLECTION, async docs => {
-      if (docs.length === 0 && !seeded) {
-        seeded = true;
-        for (const u of settingsService.getUsers()) await realtimeStore.set(USERS_COLLECTION, u as any);
-        return;
-      }
-      writeUsersCache(docs);
-      const session = settingsService.getActiveSession();
-      if (session) {
-        const fresh = docs.find(d => d.id === session.id);
+    let inner: (() => void) | null = null;
+    const stopInner = () => { inner?.(); inner = null; };
+    const unsubAuth = cloudAuth.onChange(fbUser => {
+      stopInner();
+      if (!fbUser) return;
+      const unsubUsers = realtimeStore.subscribe<User & { id: string }>(USERS_COLLECTION, docs => {
+        writeUsersCache(docs);
+        const session = settingsService.getActiveSession();
+        const fresh = session && docs.find(d => d.id === session.id);
         if (fresh) refreshSessionFrom(fresh);
-      }
-      window.dispatchEvent(new Event('storage'));
-    });
-    const unsubSettings = realtimeStore.subscribe<any>('app_settings', docs => {
-      const global = docs.find(d => d.id === 'global');
-      if (global) {
-        const { id, ...rest } = global;
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
         window.dispatchEvent(new Event('storage'));
-      }
+      });
+      const unsubSettings = realtimeStore.subscribe<any>('app_settings', docs => {
+        const global = docs.find(d => d.id === 'global');
+        if (global) {
+          const { id, ...rest } = global;
+          localStorage.setItem(SETTINGS_KEY, JSON.stringify(rest));
+          window.dispatchEvent(new Event('storage'));
+        }
+      });
+      inner = () => { unsubUsers(); unsubSettings(); };
     });
-    userSyncUnsub = () => { unsubUsers(); unsubSettings(); userSyncUnsub = null; };
+    userSyncUnsub = () => { stopInner(); unsubAuth(); userSyncUnsub = null; };
     return userSyncUnsub;
   },
 
   getUsers: (): User[] => {
     try {
-      const data = localStorage.getItem(USERS_KEY);
+      const data = localStorage.getItem(usersKey());
+      if (!data && realtimeStore.isCloud()) return [];
       if (!data) {
         const defaults = buildDefaultUsers();
         writeUsersCache(defaults);
@@ -254,6 +289,7 @@ export const settingsService = {
    * password and must change it on first login.
    */
   provisionUser: async (actor: User, data: { username: string; email: string; role: UserRole }): Promise<User> => {
+    if (realtimeStore.isCloud()) return callFn<typeof data, User>('provisionUser', data);
     const users = settingsService.getUsers();
     if (users.some(u => u.username.toLowerCase() === data.username.trim().toLowerCase())) {
       throw new Error('Username already exists');
@@ -279,6 +315,7 @@ export const settingsService = {
   },
 
   updateUserAccount: async (actor: User, id: string, patch: { username?: string; email?: string; role?: UserRole; disabled?: boolean }): Promise<User> => {
+    if (realtimeStore.isCloud()) return callFn<any, User>('updateUserAccount', { uid: id, ...patch });
     const existing = settingsService.getUsers().find(u => u.id === id);
     if (!existing) throw new Error('User not found');
     if (patch.username && settingsService.getUsers().some(u => u.id !== id && u.username.toLowerCase() === patch.username!.toLowerCase())) {
@@ -299,6 +336,7 @@ export const settingsService = {
 
   /** Admin: reset to the temporary password and force rotation on next login. */
   resetPassword: async (actor: User, id: string): Promise<void> => {
+    if (realtimeStore.isCloud()) { await callFn('resetUserPassword', { uid: id }); return; }
     const existing = settingsService.getUsers().find(u => u.id === id);
     if (!existing) throw new Error('User not found');
     const salt = randomSalt();
@@ -315,6 +353,7 @@ export const settingsService = {
   },
 
   unlockUser: async (actor: User, id: string): Promise<void> => {
+    if (realtimeStore.isCloud()) throw new Error('In cloud mode lockout is managed by Firebase Authentication');
     const existing = settingsService.getUsers().find(u => u.id === id);
     if (!existing) return;
     await persistUser({ ...existing, failedLoginAttempts: 0, lockedUntil: undefined });
@@ -323,6 +362,17 @@ export const settingsService = {
 
   /** User-initiated (or forced) password change. */
   changePassword: async (userId: string, currentPassword: string, newPassword: string): Promise<void> => {
+    if (realtimeStore.isCloud()) {
+      const self = settingsService.getActiveSession();
+      const policy = checkPasswordPolicy(newPassword, self?.username ?? '');
+      if (!policy.ok) throw new Error(`Password policy: ${policy.errors.join(', ')}`);
+      if (newPassword === TEMP_PASSWORD) throw new Error('The temporary password cannot be reused');
+      await cloudAuth.reauthenticate(currentPassword);
+      await callFn('changePassword', { newPassword });
+      const fb = cloudAuth.current();
+      if (fb) establishSession(await cloudAuth.loadProfile(fb));
+      return;
+    }
     const existing = settingsService.getUsers().find(u => u.id === userId);
     if (!existing) throw new Error('User not found');
     if (!(await verifyCredential(existing, currentPassword))) throw new Error('Current password is incorrect');
@@ -344,6 +394,7 @@ export const settingsService = {
   },
 
   deleteUser: async (actor: User, id: string): Promise<void> => {
+    if (realtimeStore.isCloud()) { await callFn('deleteUserAccount', { uid: id }); return; }
     const users = settingsService.getUsers();
     const target = users.find(u => u.id === id);
     if (!target) return;
@@ -357,34 +408,33 @@ export const settingsService = {
     auditService.log(actor, 'USER_DELETED', { id, name: target.username }, { role: target.role });
   },
 
-  authenticate: async (username: string, pass: string): Promise<{ user?: User; error?: string }> => {
+  /**
+   * Step 1 of sign-in: password verification. May require a TOTP challenge or
+   * (for administrators when MFA is mandatory) enrolment before a session exists.
+   */
+  authenticate: async (username: string, pass: string): Promise<AuthResult> => {
+    pending = null;
+    if (realtimeStore.isCloud()) return settingsService.cloudAuthenticate(username, pass);
+
     const users = settingsService.getUsers();
     const user = users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
     const generic = 'Invalid security credentials provided';
     if (!user) {
       auditService.log({ id: 'unknown', username: username.trim() || '(empty)' }, 'LOGIN_FAILED', undefined, { reason: 'unknown_user' });
-      return { error: generic };
+      return { status: 'error', error: generic };
     }
     if (user.disabled) {
       auditService.log(user, 'LOGIN_FAILED', { id: user.id, name: user.username }, { reason: 'disabled' });
-      return { error: 'Account disabled. Contact an administrator.' };
+      return { status: 'error', error: 'Account disabled. Contact an administrator.' };
     }
     if (user.lockedUntil && new Date(user.lockedUntil).getTime() > Date.now()) {
       auditService.log(user, 'LOGIN_FAILED', { id: user.id, name: user.username }, { reason: 'locked' });
-      return { error: `Account locked until ${new Date(user.lockedUntil).toLocaleTimeString()}` };
+      return { status: 'error', error: `Account locked until ${new Date(user.lockedUntil).toLocaleTimeString()}` };
     }
     if (!(await verifyCredential(user, pass))) {
-      const attempts = (user.failedLoginAttempts || 0) + 1;
-      const locked = attempts >= MAX_FAILED_LOGINS;
-      await persistUser({
-        ...user,
-        failedLoginAttempts: locked ? 0 : attempts,
-        lockedUntil: locked ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000).toISOString() : user.lockedUntil,
-      });
-      auditService.log(user, locked ? 'ACCOUNT_LOCKED' : 'LOGIN_FAILED', { id: user.id, name: user.username }, { attempts });
-      return { error: locked ? `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.` : generic };
+      return { status: 'error', error: await settingsService.registerFailure(user, 'LOGIN_FAILED') };
     }
-    const updated: User = { ...user, failedLoginAttempts: 0, lockedUntil: undefined, lastLoginAt: new Date().toISOString() };
+    const updated: User = { ...user, failedLoginAttempts: 0, lockedUntil: undefined };
     // Migrate legacy plaintext credentials to PBKDF2 hashes on successful login.
     if (!user.passwordHash && user.password) {
       const salt = randomSalt();
@@ -393,12 +443,133 @@ export const settingsService = {
       delete updated.password;
     }
     await persistUser(updated);
-    const session: StoredSession = {
-      ...stripSecrets(updated),
-      sessionExpiresAt: new Date(Date.now() + SESSION_TTL_HOURS * 3_600_000).toISOString(),
-    };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    return { user: stripSecrets(updated) };
+
+    if (updated.mfaEnrolledAt && updated.mfaSecret) {
+      pending = { kind: 'local_challenge', userId: updated.id, expires: Date.now() + PENDING_TTL };
+      return { status: 'mfa_challenge' };
+    }
+    if (mfaRequiredFor(updated)) {
+      const secret = generateTotpSecret();
+      pending = { kind: 'local_enroll', userId: updated.id, secret, expires: Date.now() + PENDING_TTL };
+      return { status: 'mfa_enroll', secret, uri: otpauthUri(secret, updated.username) };
+    }
+    return { status: 'ok', user: await settingsService.completeLocalLogin(updated) };
+  },
+
+  /** Count a failed password / MFA attempt and lock the account when the limit is reached. */
+  registerFailure: async (user: User, action: 'LOGIN_FAILED' | 'MFA_CHALLENGE_FAILED'): Promise<string> => {
+    const fresh = settingsService.getUsers().find(u => u.id === user.id) ?? user;
+    const attempts = (fresh.failedLoginAttempts || 0) + 1;
+    const locked = attempts >= MAX_FAILED_LOGINS;
+    await persistUser({
+      ...fresh,
+      failedLoginAttempts: locked ? 0 : attempts,
+      lockedUntil: locked ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000).toISOString() : fresh.lockedUntil,
+    });
+    auditService.log(fresh, locked ? 'ACCOUNT_LOCKED' : action, { id: fresh.id, name: fresh.username }, { attempts });
+    if (locked) { pending = null; return `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`; }
+    return action === 'MFA_CHALLENGE_FAILED' ? 'Invalid authentication code' : 'Invalid security credentials provided';
+  },
+
+  completeLocalLogin: async (u: User): Promise<User> => {
+    const updated = { ...u, failedLoginAttempts: 0, lockedUntil: undefined, lastLoginAt: new Date().toISOString() };
+    await persistUser(updated);
+    return establishSession(updated);
+  },
+
+  cloudAuthenticate: async (login: string, pass: string): Promise<AuthResult> => {
+    const res = await cloudAuth.signIn(login, pass);
+    if (res.status === 'error') return res;
+    if (res.status === 'mfa_challenge') {
+      pending = { kind: 'cloud_challenge', resolver: res.resolver, login };
+      return { status: 'mfa_challenge' };
+    }
+    const profile = await cloudAuth.loadProfile(res.fbUser);
+    if (profile.disabled) { await cloudAuth.signOut(); return { status: 'error', error: 'Account disabled. Contact an administrator.' }; }
+    if (mfaRequiredFor(profile) && !cloudAuth.isMfaEnrolled()) {
+      try {
+        const { secret, uri, key } = await cloudAuth.startTotpEnrollment(profile.email || profile.username);
+        pending = { kind: 'cloud_enroll', secret };
+        return { status: 'mfa_enroll', secret: key, uri };
+      } catch (e: any) {
+        await cloudAuth.signOut();
+        return { status: 'error', error: `MFA enrolment unavailable: ${e.message}. Enable TOTP MFA (Identity Platform) for this project.` };
+      }
+    }
+    return { status: 'ok', user: establishSession(profile) };
+  },
+
+  /** Step 2a: verify a TOTP code for an enrolled account. */
+  verifyMfa: async (code: string): Promise<AuthResult> => {
+    const p = pending;
+    if (!p) return { status: 'error', error: 'Sign-in session expired. Start again.' };
+    if (p.kind === 'cloud_challenge') {
+      try {
+        const fb = await cloudAuth.completeMfa(p.resolver, code);
+        return { status: 'ok', user: establishSession(await cloudAuth.loadProfile(fb)) };
+      } catch (e: any) {
+        callFn('recordLoginFailure', { username: p.login, mfa: true }).catch(() => {});
+        return { status: 'error', error: e.message };
+      }
+    }
+    if (p.kind !== 'local_challenge' || p.expires < Date.now()) { pending = null; return { status: 'error', error: 'Sign-in session expired. Start again.' }; }
+    const user = settingsService.getUsers().find(u => u.id === p.userId);
+    if (!user?.mfaSecret) return { status: 'error', error: 'MFA is not configured for this account' };
+    const step = await verifyTotp(user.mfaSecret, code, Date.now(), user.mfaLastStep);
+    if (step === null) return { status: 'error', error: await settingsService.registerFailure(user, 'MFA_CHALLENGE_FAILED') };
+    return { status: 'ok', user: await settingsService.completeLocalLogin({ ...user, mfaLastStep: step }) };
+  },
+
+  /** Step 2b: confirm authenticator enrolment with a first valid code. */
+  confirmMfaEnrollment: async (code: string): Promise<AuthResult> => {
+    const p = pending;
+    if (!p) return { status: 'error', error: 'Enrolment session expired. Start again.' };
+    if (p.kind === 'cloud_enroll') {
+      try {
+        await cloudAuth.finishTotpEnrollment(p.secret, code);
+        const fb = cloudAuth.current()!;
+        const profile = await cloudAuth.loadProfile(fb);
+        auditService.log(profile, 'MFA_ENROLLED', { id: profile.id, name: profile.username }, { factor: 'totp', self: !!p.self });
+        return { status: 'ok', user: establishSession(profile) };
+      } catch (e: any) { return { status: 'error', error: e.message }; }
+    }
+    if (p.kind !== 'local_enroll' || p.expires < Date.now()) { pending = null; return { status: 'error', error: 'Enrolment session expired. Start again.' }; }
+    const user = settingsService.getUsers().find(u => u.id === p.userId);
+    if (!user) return { status: 'error', error: 'User not found' };
+    const step = await verifyTotp(p.secret, code);
+    if (step === null) return { status: 'error', error: 'Invalid authentication code — check the time on your device' };
+    const enrolled: User = { ...user, mfaSecret: p.secret, mfaEnrolledAt: new Date().toISOString(), mfaLastStep: step };
+    auditService.log(user, 'MFA_ENROLLED', { id: user.id, name: user.username }, { factor: 'totp', self: !!p.self });
+    if (p.self) { await persistUser(enrolled); pending = null; return { status: 'ok', user: stripSecrets(enrolled) }; }
+    return { status: 'ok', user: await settingsService.completeLocalLogin(enrolled) };
+  },
+
+  /** Signed-in user voluntarily enrols an authenticator. */
+  beginSelfEnrollment: async (user: User): Promise<{ secret: string; uri: string }> => {
+    if (realtimeStore.isCloud()) {
+      const { secret, uri, key } = await cloudAuth.startTotpEnrollment(user.email || user.username);
+      pending = { kind: 'cloud_enroll', secret, self: true };
+      return { secret: key, uri };
+    }
+    const secret = generateTotpSecret();
+    pending = { kind: 'local_enroll', userId: user.id, secret, expires: Date.now() + PENDING_TTL, self: true };
+    return { secret, uri: otpauthUri(secret, user.username) };
+  },
+
+  cancelPendingAuth: async (): Promise<void> => {
+    const wasCloud = pending?.kind?.startsWith('cloud') && !(pending as any).self;
+    pending = null;
+    if (wasCloud) await cloudAuth.signOut();
+  },
+
+  /** Admin: remove a user's authenticator so they re-enrol at next sign-in. */
+  resetMfa: async (actor: User, id: string): Promise<void> => {
+    if (realtimeStore.isCloud()) { await callFn('resetUserMfa', { uid: id }); return; }
+    const existing = settingsService.getUsers().find(u => u.id === id);
+    if (!existing) throw new Error('User not found');
+    const { mfaSecret, mfaEnrolledAt, mfaLastStep, ...rest } = existing;
+    await persistUser(rest as User);
+    auditService.log(actor, 'MFA_RESET', { id, name: existing.username });
   },
 
   /** Returns the session if still valid; revalidates against the (synced) user registry. */
@@ -410,17 +581,19 @@ export const settingsService = {
       if (session.sessionExpiresAt && new Date(session.sessionExpiresAt).getTime() < Date.now()) {
         localStorage.removeItem(SESSION_KEY);
         auditService.log(session, 'SESSION_EXPIRED');
+        if (realtimeStore.isCloud()) cloudAuth.signOut().catch(() => {});
         return null;
       }
-      const raw = localStorage.getItem(USERS_KEY);
+      const raw = localStorage.getItem(usersKey());
       if (raw) {
         const registry: User[] = JSON.parse(raw);
         const fresh = registry.find(u => u.id === session.id);
-        if (!fresh || fresh.disabled) {
+        // In cloud mode the directory may still be loading — the server enforces access.
+        if ((!fresh && !realtimeStore.isCloud()) || fresh?.disabled) {
           localStorage.removeItem(SESSION_KEY);
           return null;
         }
-        return { ...stripSecrets(fresh) };
+        if (fresh) return { ...stripSecrets(fresh), role: realtimeStore.isCloud() ? session.role : fresh.role };
       }
       return session;
     } catch (e) {
@@ -430,6 +603,8 @@ export const settingsService = {
 
   logout: (): void => {
     localStorage.removeItem(SESSION_KEY);
+    pending = null;
+    if (realtimeStore.isCloud()) cloudAuth.signOut().catch(() => {});
     window.dispatchEvent(new Event('storage'));
   },
 
