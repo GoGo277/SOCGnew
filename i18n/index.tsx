@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { ZH } from './zh';
+import { EN } from './en';
 
 /**
  * Lightweight i18n for G-Eyes SR modules.
@@ -14,7 +15,7 @@ const interpolate = (s: string, vars?: Record<string, string | number>) =>
   vars ? s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined ? String(vars[k]) : `{${k}}`)) : s;
 
 export const makeTranslator = (lang: Language): Translate => (key, vars) => {
-  const table: Record<string, string> = lang === 'zh' ? ZH : {};
+  const table: Record<string, string> = lang === 'zh' ? ZH : EN;
   const hit = table[key] ?? translations[lang]?.[key];
   return interpolate(hit ?? key, vars);
 };

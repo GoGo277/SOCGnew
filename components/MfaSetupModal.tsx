@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useEscape } from '../lib/useEscape';
 import { ShieldCheck, X } from 'lucide-react';
 import { User } from '../types';
 import { settingsService } from '../services/settingsService';
@@ -8,6 +9,7 @@ import { useT } from '../i18n';
 /** Voluntary authenticator enrolment for a signed-in user. */
 const MfaSetupModal: React.FC<{ user: User; onClose: () => void; onDone: () => void }> = ({ user, onClose, onDone }) => {
   const t = useT();
+  useEscape(onClose);
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);

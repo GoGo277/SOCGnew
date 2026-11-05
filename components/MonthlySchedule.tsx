@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useEscape } from '../lib/useEscape';
 import { ChevronLeft, ChevronRight, CalendarDays, X, Plus, Trash2, Copy, AlertTriangle, Lock, Users, ArrowLeftRight } from 'lucide-react';
 import { DutySchedule, ShiftSwapRequest, User } from '../types';
 import { SHIFTS, SHIFT_ORDER, ShiftId, getShift, getShiftWindow, toDateKey, fromDateKey } from '../lib/shifts';
@@ -167,9 +168,12 @@ interface ModalProps {
 
 const DayRosterModal: React.FC<ModalProps> = ({ date, schedule, schedules, swaps, users, allUsers, canManage, currentUser, onClose, onToast }) => {
   const { t, lang } = useI18n();
+  const [swapOpen, setSwapOpenFlag] = useState(false);
+  useEscape(onClose, !swapOpen);
   const [pick, setPick] = useState<Record<ShiftId, string>>({ morning: '', evening: '', night: '' });
   const [busy, setBusy] = useState(false);
-  const [swapFor, setSwapFor] = useState<ShiftId | null>(null);
+  const [swapFor, setSwapForState] = useState<ShiftId | null>(null);
+  const setSwapFor = (v: ShiftId | null) => { setSwapForState(v); setSwapOpenFlag(!!v); };
   const nameOf = (id: string) => allUsers.find(u => u.id === id)?.username ?? t('Removed user');
 
   const commit = async (next: DutySchedule) => {

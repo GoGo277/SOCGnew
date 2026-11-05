@@ -30,3 +30,8 @@ dist-ssr
 
 # Firebase
 .firebase/
+
+# Test output
+test-results/
+playwright-report/
+*-debug.log

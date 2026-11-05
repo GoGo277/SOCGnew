@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useEscape } from '../../lib/useEscape';
 import { ArrowRightLeft, CheckCircle2, AlertTriangle, X, Lock, Clock } from 'lucide-react';
 import { HandoverAck, ShiftReport, SlaPolicy, User } from '../../types';
 import { getActiveShift, getShift } from '../../lib/shifts';
@@ -71,6 +72,7 @@ const HandoverPanel: React.FC<Props> = ({ status, acks, currentUser, sla, canAck
 
 const AckModal: React.FC<{ report: ShiftReport; acks: HandoverAck[]; currentUser: User; sla: SlaPolicy; onClose: () => void; onDone: () => void }> = ({ report, acks, currentUser, sla, onClose, onDone }) => {
   const t = useT();
+  useEscape(onClose);
   const [reviewed, setReviewed] = useState(false);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);

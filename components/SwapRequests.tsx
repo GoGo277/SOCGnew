@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useEscape } from '../lib/useEscape';
 import { ArrowLeftRight, X, Check, Ban, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { DutySchedule, ShiftSwapRequest, SwapStatus, User } from '../types';
 import { SHIFT_ORDER, ShiftId, getShift, getShiftWindow, toDateKey } from '../lib/shifts';
@@ -32,6 +33,7 @@ interface RequestProps {
 
 export const SwapRequestModal: React.FC<RequestProps> = ({ date, shift, currentUser, users, schedules, swaps, onClose, onDone }) => {
   const t = useT();
+  useEscape(onClose);
   const [peerId, setPeerId] = useState('');
   const [mode, setMode] = useState<'cover' | 'exchange'>('cover');
   const [returnSlot, setReturnSlot] = useState('');

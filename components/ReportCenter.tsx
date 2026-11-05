@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useEscape } from '../lib/useEscape';
 import { CalendarClock, Archive, LayoutTemplate, Plus, Play, Edit3, Trash2, X, Download, ShieldCheck, ShieldX, Mail, Eye } from 'lucide-react';
 import { ArchivedReport, HandoverAck, ReportSchedule, ReportTemplate, ScheduleFrequency, ShiftReport, SlaPolicy, User } from '../types';
 import { scheduleService } from '../services/scheduleService';
@@ -155,6 +156,7 @@ const ReportCenter: React.FC<Props> = ({ schedules, archive, templates, reports,
 
 const ScheduleEditor: React.FC<{ schedule: ReportSchedule | null; templates: ReportTemplate[]; currentUser: User; onClose: () => void; onSaved: () => void }> = ({ schedule, templates, currentUser, onClose, onSaved }) => {
   const { t } = useI18n();
+  useEscape(onClose);
   const [form, setForm] = useState({
     name: schedule?.name ?? '',
     kind: schedule?.kind ?? 'executive_brief' as ReportSchedule['kind'],
@@ -243,6 +245,7 @@ const ScheduleEditor: React.FC<{ schedule: ReportSchedule | null; templates: Rep
 
 const ArchiveViewer: React.FC<{ entry: ArchivedReport; onClose: () => void }> = ({ entry, onClose }) => {
   const { t } = useI18n();
+  useEscape(onClose);
   const [verified, setVerified] = useState<boolean | null>(null);
   const html = useMemo(() => markdownToHtml(entry.markdown), [entry.markdown]);
   return (

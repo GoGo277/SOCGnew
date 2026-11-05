@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useEscape } from '../../lib/useEscape';
 import { Plus, Search, Download, BarChart3, CheckSquare, Square, Crosshair, X, CheckCircle2, Hourglass } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
 import { Asset, DutySchedule, HandoverAck, Incident, ReportTemplate, RolePermissions, ShiftReport, SlaPolicy, User } from '../../types';
@@ -218,6 +219,7 @@ const ShiftReportsPage: React.FC<Props> = ({ reports, acks, schedules, assets, t
 
 const NewReportModal: React.FC<{ reports: ShiftReport[]; currentUser: User; onClose: () => void; onCreated: (id: string) => void }> = ({ reports, currentUser, onClose, onCreated }) => {
   const t = useT();
+  useEscape(onClose);
   const [date, setDate] = useState(toDateKey(new Date()));
   const [shift, setShift] = useState<ShiftId>(getActiveShift().shift.id);
   const exists = reports.find(r => r.id === reportId(date, shift));
@@ -247,6 +249,7 @@ const NewReportModal: React.FC<{ reports: ShiftReport[]; currentUser: User; onCl
 
 const ComparativeAnalysis: React.FC<{ reports: ShiftReport[]; sla: SlaPolicy; onClose: () => void }> = ({ reports, sla, onClose }) => {
   const t = useT();
+  useEscape(onClose);
   const rows = useMemo(() => [...reports].sort((a, b) => (a.date + a.shift).localeCompare(b.date + b.shift)).map(r => ({ r, m: computeMetrics([r], null, sla) })), [reports, sla]);
   const agg = useMemo(() => computeMetrics(reports, null, sla), [reports, sla]);
   const chart = rows.map(({ r, m }) => ({ name: `${r.date.slice(5)} ${t(getShift(r.shift).label).slice(0, 1)}`, ...m.bySeverity }));

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEscape } from '../../lib/useEscape';
 import { ArrowLeft, Clock, CloudUpload, Download, Lock, Trash2, Users, ShieldCheck, ShieldX, Plus, Crosshair, AlertTriangle, CornerDownRight, CheckCircle2, Hourglass } from 'lucide-react';
 import { Asset, EventStatus, HandoverAck, Incident, RolePermissions, ShiftEvent, ShiftReport, SlaPolicy, User } from '../../types';
 import { getShift } from '../../lib/shifts';
@@ -165,7 +166,7 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex-1 min-w-[240px]">
             <div className="flex flex-wrap items-center gap-2 mb-2"><ReportStatusBadge r={report} /><span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${shift.badge}`}>{t(shift.label)} · {shift.timing}</span><span className="text-[10px] text-zinc-500 font-mono">{report.id} · rev {report.revision}</span></div>
-            <input value={title} onChange={edit(setTitle)} disabled={locked} aria-label={t('Report title')} className="w-full bg-transparent text-xl sm:text-2xl font-black text-white outline-none disabled:opacity-100" />
+            <input value={title} onChange={edit(setTitle)} disabled={locked} aria-label={t('Report title')} className="w-full bg-transparent text-base sm:text-2xl font-black text-white outline-none disabled:opacity-100 text-ellipsis" />
             <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5"><Users className="w-3.5 h-3.5 shrink-0" /> {(report.contributors || []).join(', ')} · {t('created by {user}', { user: report.createdBy })} {new Date(report.createdAt).toLocaleString()}</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center w-full sm:w-auto">
@@ -260,6 +261,7 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
 
 const Confirm: React.FC<{ title: string; confirmLabel: string; tone: 'red' | 'emerald'; busy: boolean; onCancel: () => void; onConfirm: () => void; children: React.ReactNode }> = ({ title, confirmLabel, tone, busy, onCancel, onConfirm, children }) => {
   const t = useT();
+  useEscape(onCancel);
   return (
     <div className="fixed inset-0 z-[60] bg-black/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <div className="modal-entrance w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 space-y-4">
