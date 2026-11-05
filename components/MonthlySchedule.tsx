@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { uiConfirm } from '../lib/dialogs';
 import { useEscape } from '../lib/useEscape';
 import { ChevronLeft, ChevronRight, CalendarDays, X, Plus, Trash2, Copy, AlertTriangle, Lock, Users, ArrowLeftRight } from 'lucide-react';
 import { DutySchedule, ShiftSwapRequest, User } from '../types';
@@ -197,7 +198,7 @@ const DayRosterModal: React.FC<ModalProps> = ({ date, schedule, schedules, swaps
     const cur = new Date(d); cur.setDate(cur.getDate() + 7);
     while (cur.getMonth() === d.getMonth()) { targets.push(toDateKey(cur)); cur.setDate(cur.getDate() + 7); }
     if (!targets.length) { onToast(t('No remaining matching weekdays this month')); return; }
-    if (!confirm(t('Copy this roster to {n} upcoming matching weekday(s) this month? Existing assignments on those days will be replaced.', { n: targets.length }))) return;
+    if (!(await uiConfirm(t('Copy this roster to {n} upcoming matching weekday(s) this month? Existing assignments on those days will be replaced.', { n: targets.length })))) return;
     setBusy(true);
     try { await dutyService.copyDay(currentUser, schedule, targets); onToast(t('Roster replicated to {n} day(s)', { n: targets.length })); }
     finally { setBusy(false); }

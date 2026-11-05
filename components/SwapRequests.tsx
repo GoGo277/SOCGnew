@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { uiPrompt } from '../lib/dialogs';
 import { useEscape } from '../lib/useEscape';
 import { ArrowLeftRight, X, Check, Ban, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { DutySchedule, ShiftSwapRequest, SwapStatus, User } from '../types';
@@ -180,7 +181,7 @@ export const SwapPanel: React.FC<PanelProps> = ({ swaps, schedules, users, curre
                   {isAdmin && s.status === 'pending_admin' && (
                     <>
                       <button disabled={busyId === s.id} onClick={() => run(s.id, () => swapService.decide(currentUser, s, true, '', schedules, users), t('Swap approved — roster updated'))} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold flex items-center gap-1"><Check className="w-3.5 h-3.5" /> {t('Approve')}</button>
-                      <button disabled={busyId === s.id} onClick={() => { const note = prompt(t('Reason for rejection')); if (note !== null) run(s.id, () => swapService.decide(currentUser, s, false, note, schedules, users), t('Swap rejected')); }} className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-300 text-xs font-bold flex items-center gap-1"><Ban className="w-3.5 h-3.5" /> {t('Reject')}</button>
+                      <button disabled={busyId === s.id} onClick={async () => { const note = await uiPrompt(t('Reason for rejection'), { title: t('Reject') }); if (note !== null) run(s.id, () => swapService.decide(currentUser, s, false, note, schedules, users), t('Swap rejected')); }} className="px-3 py-1.5 rounded-lg border border-red-500/40 text-red-300 text-xs font-bold flex items-center gap-1"><Ban className="w-3.5 h-3.5" /> {t('Reject')}</button>
                     </>
                   )}
                   {s.requesterId === currentUser.id && swapService.isPending(s) && (

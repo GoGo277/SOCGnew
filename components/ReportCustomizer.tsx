@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { uiConfirm, uiPrompt } from '../lib/dialogs';
 import { useEscape } from '../lib/useEscape';
 import { X, FileDown, FileText, FileCode, FileJson, File as FileIcon, Plus, Trash2, Archive, Eye, EyeOff, BookmarkPlus, LayoutTemplate } from 'lucide-react';
 import { CustomSection, ExportFormat, HandoverAck, ReportExportOptions, ReportTemplate, ShiftReport, SlaPolicy, User } from '../types';
@@ -59,7 +60,7 @@ const ReportCustomizer: React.FC<Props> = ({ reports, acks = [], templates = [],
   };
 
   const saveTemplate = async () => {
-    const name = prompt(t('Template name'), selectedTemplate?.name ?? '');
+    const name = await uiPrompt(t('Template name'), { title: t('Save as template'), defaultValue: selectedTemplate?.name ?? '' });
     if (!name) return;
     const overwrite = selectedTemplate && selectedTemplate.name === name.trim() ? selectedTemplate : undefined;
     try {
@@ -70,7 +71,7 @@ const ReportCustomizer: React.FC<Props> = ({ reports, acks = [], templates = [],
   };
 
   const deleteTemplate = async () => {
-    if (!selectedTemplate || !confirm(t('Delete template "{name}"?', { name: selectedTemplate.name }))) return;
+    if (!selectedTemplate || !(await uiConfirm(t('Delete template "{name}"?', { name: selectedTemplate.name }), { tone: 'danger' }))) return;
     await templateService.remove(currentUser, selectedTemplate);
     setTemplateId('');
   };

@@ -1,4 +1,5 @@
 
+import { uiAlert } from '../lib/dialogs';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Guideline, User, UserRole, RolePermissions, Language } from '../types';
 import { guidelineService } from '../services/guidelineService';
@@ -92,7 +93,7 @@ const GuidelinesPage: React.FC<GuidelinesPageProps> = ({ currentUser, permission
           const imageId = imageService.saveImage(reader.result as string);
           insertText(`\n![Tactical Observation](${imageId})\n`, '');
         } catch (err) {
-          alert(String(err));
+          uiAlert(String(err));
         } finally {
           setIsUploading(false);
           if (fileInputRef.current) fileInputRef.current.value = '';

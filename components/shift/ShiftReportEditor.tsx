@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { uiConfirm, uiPrompt } from '../../lib/dialogs';
 import { useEscape } from '../../lib/useEscape';
 import { ArrowLeft, Clock, CloudUpload, Download, Lock, Trash2, Users, ShieldCheck, ShieldX, Plus, Crosshair, AlertTriangle, CornerDownRight, CheckCircle2, Hourglass } from 'lucide-react';
 import { Asset, EventStatus, HandoverAck, Incident, RolePermissions, ShiftEvent, ShiftReport, SlaPolicy, User } from '../../types';
@@ -98,8 +99,8 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
     setEventForm({ open: false, event: null });
   }, eventForm.event ? t('Event updated') : t('Event logged'));
 
-  const removeEvent = (ev: ShiftEvent) => {
-    if (!confirm(t('Remove event "{name}" from this draft?', { name: ev.eventName }))) return;
+  const removeEvent = async (ev: ShiftEvent) => {
+    if (!(await uiConfirm(t('Remove event "{name}" from this draft?', { name: ev.eventName }), { tone: 'danger', confirmLabel: t('Remove event') }))) return;
     guard(() => shiftReportService.removeEvent(currentUser, latestRef.current, ev.id), t('Event removed'));
   };
 
@@ -122,7 +123,7 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
   }, t('Report finalized and sealed'));
 
   const del = async () => {
-    const typed = prompt(t('Deleting a {status} report is permanent and audited.\nType the report ID to confirm:\n{id}', { status: t(report.status), id: report.id }));
+    const typed = await uiPrompt(t('Deleting a {status} report is permanent and audited.\nType the report ID to confirm:\n{id}', { status: t(report.status), id: report.id }), { title: t('Delete report'), placeholder: report.id, confirmLabel: t('Delete report') });
     if (typed !== report.id) return;
     await guard(() => shiftReportService.remove(currentUser, report), t('Report deleted'));
     onBack();

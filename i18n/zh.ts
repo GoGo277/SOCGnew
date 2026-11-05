@@ -1,5 +1,9 @@
 /** Simplified Chinese strings for G-Eyes SR modules (keys are the English source text). */
 export const ZH: Record<string, string> = {
+  "Notice": "提示",
+  "Please confirm": "请确认",
+  "OK": "确定",
+  "Confirm": "确认",
   "Demo mode — sign in with admin / admin. Data stays in this browser. Not for production use.": "演示模式——使用 admin / admin 登录。数据仅保存在此浏览器中，请勿用于生产环境。",
   "24/7 three-shift coverage · Morning 08–16 · Evening 16–00 · Night 00–08": "7×24 三班覆盖 · 早班 08–16 · 晚班 16–00 · 夜班 00–08",
   "30 days": "30 天",

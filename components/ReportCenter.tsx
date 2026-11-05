@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { uiConfirm } from '../lib/dialogs';
 import { useEscape } from '../lib/useEscape';
 import { CalendarClock, Archive, LayoutTemplate, Plus, Play, Edit3, Trash2, X, Download, ShieldCheck, ShieldX, Mail, Eye } from 'lucide-react';
 import { ArchivedReport, HandoverAck, ReportSchedule, ReportTemplate, ScheduleFrequency, ShiftReport, SlaPolicy, User } from '../types';
@@ -96,7 +97,7 @@ const ReportCenter: React.FC<Props> = ({ schedules, archive, templates, reports,
                       <>
                         <button onClick={() => toggle(s)} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 text-xs font-bold">{s.enabled ? t('Pause') : t('Resume')}</button>
                         <button aria-label={t('Edit schedule')} onClick={() => setEditing(s)} className="p-2 rounded-lg text-zinc-500 hover:text-blue-400"><Edit3 className="w-4 h-4" /></button>
-                        <button aria-label={t('Delete schedule')} onClick={async () => { if (confirm(t('Delete schedule "{name}"?', { name: s.name }))) await scheduleService.remove(currentUser, s); }} className="p-2 rounded-lg text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                        <button aria-label={t('Delete schedule')} onClick={async () => { if (await uiConfirm(t('Delete schedule "{name}"?', { name: s.name }), { tone: 'danger' })) await scheduleService.remove(currentUser, s); }} className="p-2 rounded-lg text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                       </>
                     )}
                   </div>
@@ -139,7 +140,7 @@ const ReportCenter: React.FC<Props> = ({ schedules, archive, templates, reports,
                     <p className="text-[11px] text-zinc-500">{x.options.classification} · {t('{n} custom section(s)', { n: x.options.customSections.length })} · {t('by {user}', { user: x.createdBy })} · {new Date(x.updatedAt).toLocaleDateString()}</p>
                   </div>
                   {(canManage || x.createdBy === currentUser.username) && (
-                    <button aria-label={t('Delete template')} onClick={async () => { if (confirm(t('Delete template "{name}"?', { name: x.name }))) await templateService.remove(currentUser, x); }} className="p-2 rounded-lg text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                    <button aria-label={t('Delete template')} onClick={async () => { if (await uiConfirm(t('Delete template "{name}"?', { name: x.name }), { tone: 'danger' })) await templateService.remove(currentUser, x); }} className="p-2 rounded-lg text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
                   )}
                 </li>
               ))}

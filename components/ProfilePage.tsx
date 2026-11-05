@@ -1,4 +1,5 @@
 
+import { uiAlert } from '../lib/dialogs';
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { User, Language } from '../types';
 import { settingsService } from '../services/settingsService';
@@ -29,7 +30,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdate, language }) =
       settingsService.saveUser({ id: user.id, bio, profilePic });
       onUpdate();
       setLoading(false);
-      alert('Profile updated.');
+      uiAlert('Profile updated.');
     }, 500);
   };
 

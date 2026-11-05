@@ -1,4 +1,5 @@
 
+import { uiAlert, uiConfirm } from '../lib/dialogs';
 import React, { useState, useRef, useMemo } from 'react';
 import { AppSettings, User, UserRole, RolePermissions, Language } from '../types';
 import { settingsService, TEMP_PASSWORD } from '../services/settingsService';
@@ -69,12 +70,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
       reader.onload = (ev) => {
         try {
           const archive = JSON.parse(ev.target?.result as string);
-          if (confirm('CAUTION: This will overwrite all local data, users, and settings. Proceed?')) {
-            settingsService.importFullSystem(archive);
-            window.location.reload();
-          }
+          uiConfirm('This will overwrite all local data, users, and settings.', { title: 'Import system archive', tone: 'danger', confirmLabel: 'Overwrite' }).then(ok => {
+            if (ok) { settingsService.importFullSystem(archive); window.location.reload(); }
+          });
         } catch (err) {
-          alert('Invalid system archive payload.');
+          uiAlert('Invalid system archive payload.');
         }
       };
       reader.readAsText(file);
@@ -107,7 +107,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
         await settingsService.updateUserAccount(currentUser, editingUserId, { username: userFormData.username.trim(), email: userFormData.email.trim(), role: userFormData.role });
       } else {
         await settingsService.provisionUser(currentUser, { username: userFormData.username, email: userFormData.email, role: userFormData.role });
-        alert(`Account "${userFormData.username}" provisioned.\n\nTemporary password: ${TEMP_PASSWORD}\nThe analyst must change it at first login.`);
+        uiAlert(`Temporary password: ${TEMP_PASSWORD}\nThe analyst must change it at first sign-in.`, { title: `Account "${userFormData.username}" provisioned` });
       }
       onUsersUpdate(settingsService.getUsers());
       setIsUserFormOpen(false);
@@ -122,9 +122,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
     try {
       await fn();
       onUsersUpdate(settingsService.getUsers());
-      if (msg) alert(msg);
+      if (msg) uiAlert(msg);
     } catch (err: any) {
-      alert(err.message || 'Operation failed');
+      uiAlert(err.message || 'Operation failed');
     }
   };
 
@@ -239,11 +239,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                             <td className="p-5 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.role}</span></td>
                             <td className="p-5 text-right"><div className="flex justify-end gap-1">
                               <button title="Edit account" onClick={() => startEditUser(u)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all active:scale-90"><Edit3 className="w-4 h-4" /></button>
-                              <button title={`Reset password to temporary credential (${TEMP_PASSWORD})`} onClick={() => { if (confirm(`Reset ${u.username}'s password to the temporary credential? They will be forced to change it at next login.`)) runUserAction(() => settingsService.resetPassword(currentUser, u.id), `Password reset. Temporary password: ${TEMP_PASSWORD}`); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-all active:scale-90"><RotateCcw className="w-4 h-4" /></button>
-                              {u.mfaEnrolledAt && <button title="Reset two-step verification" onClick={() => { if (confirm(`Reset two-step verification for ${u.username}? They must enrol a new authenticator at next sign-in.`)) runUserAction(() => settingsService.resetMfa(currentUser, u.id), 'Two-step verification reset.'); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-all active:scale-90"><ShieldOff className="w-4 h-4" /></button>}
+                              <button title={`Reset password to temporary credential (${TEMP_PASSWORD})`} onClick={async () => { if (await uiConfirm(`Reset ${u.username}'s password to the temporary credential? They will be forced to change it at next sign-in.`, { tone: 'danger', confirmLabel: 'Reset password' })) runUserAction(() => settingsService.resetPassword(currentUser, u.id), `Password reset. Temporary password: ${TEMP_PASSWORD}`); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-all active:scale-90"><RotateCcw className="w-4 h-4" /></button>
+                              {u.mfaEnrolledAt && <button title="Reset two-step verification" onClick={async () => { if (await uiConfirm(`Reset two-step verification for ${u.username}? They must enrol a new authenticator at next sign-in.`, { tone: 'danger', confirmLabel: 'Reset' })) runUserAction(() => settingsService.resetMfa(currentUser, u.id), 'Two-step verification reset.'); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-all active:scale-90"><ShieldOff className="w-4 h-4" /></button>}
                               {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <button title="Unlock account" onClick={() => runUserAction(() => settingsService.unlockUser(currentUser, u.id))} className="p-2 hover:bg-zinc-800 rounded-lg text-amber-400 transition-all active:scale-90"><Unlock className="w-4 h-4" /></button>}
                               {u.id !== currentUser.id && <button title={u.disabled ? 'Enable account' : 'Disable account'} onClick={() => runUserAction(() => settingsService.updateUserAccount(currentUser, u.id, { disabled: !u.disabled }).then(() => undefined))} className={`p-2 hover:bg-zinc-800 rounded-lg transition-all active:scale-90 ${u.disabled ? 'text-emerald-400' : 'text-zinc-400 hover:text-orange-400'}`}>{u.disabled ? <CheckCircle2 className="w-4 h-4" /> : <Ban className="w-4 h-4" />}</button>}
-                              {u.id !== currentUser.id && <button title="Delete account" onClick={() => { if (confirm(`Permanently delete ${u.username}? This is recorded in the audit trail.`)) runUserAction(() => settingsService.deleteUser(currentUser, u.id)); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button>}
+                              {u.id !== currentUser.id && <button title="Delete account" onClick={async () => { if (await uiConfirm(`Permanently delete ${u.username}? This is recorded in the audit trail.`, { tone: 'danger', confirmLabel: 'Delete account' })) runUserAction(() => settingsService.deleteUser(currentUser, u.id)); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button>}
                             </div></td>
                          </tr>
                        ))}
