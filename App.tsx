@@ -45,6 +45,13 @@ import ReportCenter from './components/ReportCenter';
 import MfaSetupModal from './components/MfaSetupModal';
 import { cloudAuth } from './services/cloudAuth';
 import { useDfirData } from './hooks/useDfirData';
+import AlertsPage from './components/dfir/AlertsPage';
+import CasesPage from './components/dfir/CasesPage';
+import CustomersPage from './components/dfir/CustomersPage';
+import CaseTemplatesPage from './components/dfir/CaseTemplatesPage';
+import InvestigationOverview from './components/dfir/InvestigationOverview';
+import GlobalSearch from './components/dfir/GlobalSearch';
+import { caseReportService, CaseReportTemplate, BUILTIN_TEMPLATE } from './services/caseReport';
 import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
 import AuditLogPage from './components/AuditLogPage';
@@ -119,6 +126,8 @@ const App: React.FC = () => {
   }, []);
 
   const dfir = useDfirData(!!currentUser && !currentUser.forcePasswordChange);
+  const [caseReportTemplates, setCaseReportTemplates] = useState<CaseReportTemplate[]>([BUILTIN_TEMPLATE]);
+  useEffect(() => (currentUser ? caseReportService.subscribe(setCaseReportTemplates) : undefined), [currentUser?.id]);
 
   // Real-time listeners for G-Eyes SR operational collections.
   useEffect(() => {
@@ -277,9 +286,10 @@ const App: React.FC = () => {
     });
     counts['messaging'] = unreadMessages;
     if (currentUser) counts['duty'] = swapService.actionCount(swaps, currentUser, currentUser.role === 'Admin');
+    counts['alerts'] = dfir.alerts.filter(a => a.status === 'New').length;
     if (counts[activeTab] !== undefined) counts[activeTab] = 0;
     return counts;
-  }, [requests, assets, incidents, announcements, guidelines, lastSeen, currentUser, activeTab, swaps]);
+  }, [requests, assets, incidents, announcements, guidelines, lastSeen, currentUser, activeTab, swaps, dfir.alerts]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -319,6 +329,8 @@ const App: React.FC = () => {
   const sla = settings.sla ?? DEFAULT_SLA;
 
   const openReport = (id: string) => { setFocusReportId(id); handleTabChange('shift-reports'); };
+  const openAlert = (id: string) => { setFocusAlertId(id); handleTabChange('alerts'); };
+  const openCase = (id: string) => { setFocusCaseId(id); handleTabChange('cases'); };
   const handoverStatus = handoverService.currentStatus(shiftReports, handoverAcks, dutySchedules, currentUser);
 
   const handleSaveAsset = async (assetData: any) => {
@@ -473,6 +485,7 @@ const App: React.FC = () => {
       case 'dashboard': return (
         <div className="space-y-8">
           <DutyNow schedules={dutySchedules} users={users} currentUser={currentUser} />
+          <InvestigationOverview data={dfir} currentUser={currentUser} onOpenAlert={openAlert} onOpenCase={openCase} onNav={handleTabChange} />
           <HandoverPanel status={handoverStatus} acks={handoverAcks} currentUser={currentUser} sla={sla} canAcknowledge={permissions.canLogShiftEvents !== false} onToast={showToast} onOpenReport={openReport} />
           <Dashboard assets={assets} incidents={incidents} tasks={tasks} requests={requests} announcements={announcements} guidelines={guidelines} auditLogs={auditLogs} language={settings.language} />
         </div>
@@ -482,8 +495,12 @@ const App: React.FC = () => {
         <ShiftReportsPage reports={shiftReports} acks={handoverAcks} schedules={dutySchedules} assets={assets} templates={reportTemplates} sla={sla}
           currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions}
           focusReportId={focusReportId} onFocusConsumed={() => setFocusReportId(null)} onToast={showToast}
-          alerts={dfir.alerts} cases={dfir.cases} onOpenAlert={id => { setFocusAlertId(id); handleTabChange('alerts'); }} />
+          alerts={dfir.alerts} cases={dfir.cases} onOpenAlert={openAlert} />
       );
+      case 'alerts': return <AlertsPage data={dfir} users={users} currentUser={currentUser} focusAlertId={focusAlertId} onFocusConsumed={() => setFocusAlertId(null)} onOpenCase={openCase} onOpenReport={openReport} onToast={showToast} />;
+      case 'cases': return <CasesPage data={dfir} users={users} currentUser={currentUser} reportTemplates={caseReportTemplates} focusCaseId={focusCaseId} onFocusConsumed={() => setFocusCaseId(null)} onOpenAlert={openAlert} onToast={showToast} />;
+      case 'customers': return <CustomersPage data={dfir} currentUser={currentUser} onToast={showToast} />;
+      case 'case-templates': return <CaseTemplatesPage data={dfir} reportTemplates={caseReportTemplates} currentUser={currentUser} onToast={showToast} />;
       case 'reporting': return (
         <ReportCenter schedules={reportSchedules} archive={reportArchive} templates={reportTemplates} reports={shiftReports} acks={handoverAcks} sla={sla}
           currentUser={currentUser} canManage={isAdmin} onToast={showToast} />
@@ -624,7 +641,7 @@ const App: React.FC = () => {
 
   return (
     <I18nProvider lang={settings.language}>
-    <Layout onChangePassword={() => setIsChangePasswordOpen(true)} onSetupMfa={() => setIsMfaSetupOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
+    <Layout headerExtra={<GlobalSearch data={dfir} onOpenCase={openCase} onOpenAlert={openAlert} />} onChangePassword={() => setIsChangePasswordOpen(true)} onSetupMfa={() => setIsMfaSetupOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
       <NotificationCenter isOpen={isNotifCenterOpen} onClose={() => setIsNotifCenterOpen(false)} currentUser={currentUser} notifications={notifications} requests={requests} onUpdate={loadData} onOpenRequest={setSelectedRequest} language={settings.language} />
       {renderActiveTab()}
       {selectedRequest && <RequestDetailModal request={selectedRequest} isOpen={true} onClose={() => setSelectedRequest(null)} canApprove={permissions.canApproveRequests} onResolve={(st) => { requestService.resolveRequest(selectedRequest.id, currentUser, st); auditService.log(currentUser, 'REQUEST_RESOLVED', { id: selectedRequest.id, name: selectedRequest.action }, { status: st }); loadData(); setSelectedRequest(null); showToast(`Request ${st}`); }} language={settings.language} />}
