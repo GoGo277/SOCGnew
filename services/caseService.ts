@@ -5,12 +5,14 @@ import { realtimeStore } from './realtimeStore';
 import { auditService } from './auditService';
 import { INTERNAL_CUSTOMER_ID } from '../lib/dfir';
 
-export const CASES = 'cases';
-export const CUSTOMERS = 'customers';
-export const CASE_TEMPLATES = 'case_templates';
-export const CASE_ACTIVITY = 'case_activity';
+import { COL } from '../lib/collections';
+
+export const CASES = COL.cases;
+export const CUSTOMERS = COL.customers;
+export const CASE_TEMPLATES = COL.caseTemplates;
+export const CASE_ACTIVITY = COL.caseActivity;
 export const OBJECT_COLLECTIONS: Record<CaseObjectKind, string> = {
-  iocs: 'case_iocs', assets: 'case_assets', timeline: 'case_timeline', evidence: 'case_evidence', notes: 'case_notes', tasks: 'case_tasks',
+  iocs: COL.iocs, assets: COL.assets, timeline: COL.timeline, evidence: COL.evidence, notes: COL.notes, tasks: COL.tasks,
 };
 const OBJECT_LABEL: Record<CaseObjectKind, string> = { iocs: 'IOC', assets: 'asset', timeline: 'timeline event', evidence: 'evidence', notes: 'note', tasks: 'task' };
 
@@ -149,6 +151,10 @@ export const caseService = {
 
   async removeObject(actor: User, c: DfirCase, kind: CaseObjectKind, obj: { id: string } & Record<string, any>): Promise<void> {
     await realtimeStore.remove(OBJECT_COLLECTIONS[kind], obj.id);
+    // Remember IRIS-linked deletions so the next sync removes them in IRIS too.
+    if (obj.iris?.remoteId && c.iris?.remoteId) {
+      await realtimeStore.set(COL.irisTombstones, { id: `${kind}-${obj.iris.remoteId}`, kind, caseRemoteId: c.iris.remoteId, remoteId: obj.iris.remoteId, createdAt: now() });
+    }
     const label = obj.title ?? obj.value ?? obj.name ?? obj.filename ?? obj.id;
     await caseService.logActivity(actor, c.id, `Removed ${OBJECT_LABEL[kind]}`, label);
     auditService.log(actor, 'CASE_OBJECT_REMOVED', { id: c.id, name: `#${c.number} ${c.name}` }, { kind, objectId: obj.id, label, irisId: obj.iris?.remoteId });

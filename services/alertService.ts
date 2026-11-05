@@ -5,7 +5,8 @@ import { caseService } from './caseService';
 import { INTERNAL_CUSTOMER_ID } from '../lib/dfir';
 import { getShift } from '../lib/shifts';
 
-export const ALERTS = 'alerts';
+import { COL } from '../lib/collections';
+export const ALERTS = COL.alerts;
 const now = () => new Date().toISOString();
 const label = (a: Alert) => `#${a.number} ${a.title}`;
 
