@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "i18n:check": "node scripts/i18n-keys.mjs --check",
     "test:all": "npm run lint && npm test && npm run i18n:check && npm run test:emulators && npm run test:e2e",
-    "deploy": "npm run build && firebase deploy --only hosting,firestore,functions"
+    "deploy": "npm run build && firebase deploy --only hosting,firestore,functions",
+    "build:demo": "vite build --mode demo",
+    "demo": "vite build --mode demo && vite preview --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

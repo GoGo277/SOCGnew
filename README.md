@@ -49,6 +49,22 @@ npm run dev
 3. Enrol an authenticator app by scanning the QR code.
 4. Set a new password when prompted.
 
+## Public demo (admin / admin)
+
+`npm run demo` builds a **demo** variant and serves it on port 4173. The demo runs in local mode only. The bootstrap administrator is **`admin` / `admin`**, with no forced password change and no mandatory MFA. Each visitor's data stays in their own browser. Never use the demo build for real data.
+
+To share it through a Cloudflare quick tunnel ([install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)):
+
+```bash
+npm run demo
+```
+
+```bash
+cloudflared tunnel --url http://localhost:4173
+```
+
+`cloudflared` prints a `https://<random>.trycloudflare.com` URL. Vite already allows `*.trycloudflare.com` hosts.
+
 ## Production (cloud mode)
 
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). It covers Firebase project setup, enabling TOTP MFA, deploying rules, indexes and functions, bootstrapping the first administrator, e-mail delivery and WORM audit retention.

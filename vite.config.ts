@@ -9,6 +9,10 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        allowedHosts: ['.trycloudflare.com'],
+      },
+      preview: {
+        allowedHosts: ['.trycloudflare.com'],
       },
       plugins: [react(), tailwindcss()],
       define: {

@@ -22,6 +22,12 @@ export const MAX_FAILED_LOGINS = 5;
 export const LOCKOUT_MINUTES = 15;
 export const SESSION_TTL_HOURS = 12;
 
+/**
+ * Demo build (`vite build --mode demo`): local mode only, bootstrap admin is
+ * admin / admin with no forced rotation and no mandatory MFA. Never use for real data.
+ */
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true' && !realtimeStore.isCloud();
+
 export const DEFAULT_NAV_ORDER = ['dashboard', 'duty', 'shift-reports', 'executive', 'reporting', 'incidents', 'assets', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests', 'admin-requests', 'audit'];
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -30,7 +36,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   language: 'en',
   navOrder: [...DEFAULT_NAV_ORDER],
   sla: JSON.parse(JSON.stringify(DEFAULT_SLA)),
-  requireAdminMfa: true,
+  requireAdminMfa: !DEMO_MODE,
   rolePermissions: {
     Admin: {
       canCreateAsset: true,
@@ -110,7 +116,19 @@ const DEFAULT_ADMIN_ID = 'u1';
  * Bootstrap administrator. Its credential is the temporary password and it is
  * flagged forcePasswordChange, so the first login must rotate it.
  */
-const buildDefaultUsers = (): User[] => [
+const buildDefaultUsers = (): User[] => DEMO_MODE ? [
+  {
+    id: DEFAULT_ADMIN_ID,
+    username: 'admin',
+    email: 'admin@geyes.demo',
+    role: 'Admin',
+    createdAt: new Date().toISOString(),
+    bio: 'Demo administrator.',
+    profilePic: '',
+    password: 'admin', // migrated to a PBKDF2 hash at first sign-in
+    forcePasswordChange: false,
+  },
+] : [
   {
     id: DEFAULT_ADMIN_ID,
     username: 'Admin',
@@ -197,7 +215,7 @@ export const settingsService = {
       if (!parsed.language) parsed.language = 'en';
       if (!parsed.navOrder) parsed.navOrder = [...DEFAULT_NAV_ORDER];
       parsed.sla = { ...JSON.parse(JSON.stringify(DEFAULT_SLA)), ...(parsed.sla || {}) };
-      if (parsed.requireAdminMfa === undefined) parsed.requireAdminMfa = true;
+      if (parsed.requireAdminMfa === undefined) parsed.requireAdminMfa = !DEMO_MODE;
       // Merge in newly introduced modules / permissions for previously saved settings.
       DEFAULT_NAV_ORDER.forEach(id => { if (!parsed.navOrder.includes(id)) parsed.navOrder.push(id); });
       (Object.keys(DEFAULT_SETTINGS.rolePermissions) as UserRole[]).forEach(role => {

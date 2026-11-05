@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Lock, User as UserIcon, ChevronRight, AlertCircle, Smartphone, ArrowLeft } from 'lucide-react';
-import { settingsService } from '../services/settingsService';
+import { settingsService, DEMO_MODE } from '../services/settingsService';
 import { User, AppSettings } from '../types';
 import { useT } from '../i18n';
 import MfaEnrollPanel from './MfaEnrollPanel';
@@ -61,6 +61,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
             </p>
           </div>
 
+          {DEMO_MODE && stage.kind === 'credentials' && (
+            <p role="note" className="mb-5 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs text-amber-300">
+              {t('Demo mode — sign in with admin / admin. Data stays in this browser. Not for production use.')}
+            </p>
+          )}
           {stage.kind === 'credentials' && (
             <form onSubmit={e => { e.preventDefault(); handle(() => settingsService.authenticate(username, password)); }} className="space-y-5">
               <div className="space-y-1.5">
