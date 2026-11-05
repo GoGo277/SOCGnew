@@ -14,8 +14,10 @@ G-Eyes SR runs a 24/7 Security Operations Center. It covers duty rostering, shif
 | **SLA & metrics** | SLA targets per severity (contain / resolve). Each event shows a live SLA state (on track, at risk, breached, met). The platform computes MTTD, MTTC and MTTR, SLA compliance, and handover compliance. |
 | **Executive Review** | Criticality index, threat vectors, hostile IPs, targeted assets, and volume by day, shift and analyst. Response-time trends and a list of breaches. Date ranges: today, 7 days, 30 days, custom or all. |
 | **Reporting** | Exports to PDF (jsPDF), standalone HTML, Markdown and JSON. Customizer: classification / TLP, custom sections, page numbers; settings can be saved as **templates**. Batch **ZIP** includes a SHA-256 manifest and comparative analysis. The **Report Center** schedules daily, weekly or monthly executive briefs and shift digests, emails them in cloud mode, and keeps a verifiable archive. |
+| **Investigation (IRIS-style)** | **Alert triage queue** with these views: open, mine, unassigned and all. Bulk actions: assign, set status, escalate into a case, merge into a case, close with a resolution. **Cases** have state, severity, classification, outcome, customer and owner, and these tabs: summary, timeline (MITRE ATT&CK categories, linked assets and IOCs), IOCs (TLP), assets, evidence (SHA-256 computed in the browser, chain of custody), notes in directories (Markdown) with a preview, a task board and an activity feed. Closed cases are read-only. Also: **customers** for MSSP separation, **case templates** with starter playbooks, Markdown **case report templates** with placeholders (PDF/HTML/MD/JSON), and global search |
+| **DFIR-IRIS integration** | **Two-way sync** with IRIS v2.4 covering cases, every case object, alerts and customers. Lookups are resolved by name, so custom IRIS values work. Unchanged records are not re-sent, records deleted on either side are deleted on the other, and IRIS wins conflicts (logged). In cloud mode the API key is a server secret. See [`docs/IRIS_INTEGRATION.md`](docs/IRIS_INTEGRATION.md) |
 | **Audit** | Every security-relevant action gets a hashed audit entry; filter, verify, and export to CSV or JSON. In cloud mode the trail is append-only. A server-side sink re-verifies each entry and forwards it to Cloud Logging for write-once (WORM) retention. |
-| **UX** | English and Simplified Chinese. Responsive down to phone width. Keyboard-accessible dialogs. |
+| **UX** | IRIS-inspired interface with **light and dark themes** (system, light or dark, remembered per browser). English and Simplified Chinese. Responsive down to phone width. Keyboard-accessible dialogs. |
 
 The platform also includes asset inventory, incidents, tasks, announcements, messaging, SOP guidelines and approval requests.
 
@@ -74,10 +76,10 @@ See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). It covers Firebase project setup
 | Command | What it runs |
 |---|---|
 | `npm run lint` | TypeScript type-check of the app and the Cloud Functions |
-| `npm test` | Unit tests: SLA maths, carry-over de-duplication, hashing, TOTP RFC vectors, scheduling, safe Markdown, validation |
+| `npm test` | Unit tests: SLA maths, carry-over de-duplication, hashing, TOTP RFC vectors, scheduling, safe Markdown, validation, case reports, alert mapping, **IRIS sync contract tests against a mock IRIS server** |
 | `npm run i18n:check` | Every UI string has a Simplified Chinese translation |
 | `npm run test:emulators` | Firebase Emulator Suite: **security-rules tests** and **Cloud Functions integration tests** (needs Java 21) |
-| `npm run test:e2e` | Playwright: full SOC workflow with real TOTP codes (desktop), plus a phone-layout run |
+| `npm run test:e2e` | Playwright: full SOC workflow with real TOTP codes; the investigation workflow, including the IRIS round trip against the mock IRIS server; a phone-layout run |
 | `npm run test:all` | All of the above |
 
 The same checks run on every push in GitHub Actions (`.github/workflows/ci.yml`).

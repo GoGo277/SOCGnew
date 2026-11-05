@@ -74,7 +74,21 @@ npx firebase ext:install firebase/firestore-send-email --project your-project
 
 When prompted, set *Email documents collection* to `mail` and supply your SMTP connection URI.
 
-## 6. Write-once (WORM) audit retention
+## 6. DFIR-IRIS integration (optional)
+
+1. Store the API key of a dedicated IRIS service user as a secret:
+
+   ```bash
+   npx firebase functions:secrets:set IRIS_API_KEY
+   ```
+
+2. Add `IRIS_URL=https://iris.example.com` to `functions/.env`.
+3. Redeploy the functions.
+4. Configure the sync scope in **Integrations**.
+
+[`IRIS_INTEGRATION.md`](IRIS_INTEGRATION.md) covers the mapping, the conflict rules and the first-run checks.
+
+## 7. Write-once (WORM) audit retention
 
 The audit sink writes every verified entry to Cloud Logging with `jsonPayload.geyesAudit=true`. Route those entries to a retention-locked bucket.
 
@@ -101,7 +115,7 @@ The audit sink writes every verified entry to Cloud Logging with `jsonPayload.ge
 
 **Locking is irreversible.** Agree the retention period with your compliance owner before you run the last command.
 
-## 7. Post-deployment checklist
+## 8. Post-deployment checklist
 
 - [ ] The administrator can sign in, is asked for a TOTP code, and the Settings → SOC Policy MFA requirement is on.
 - [ ] Provision an analyst. The temporary password works once, and a password change is forced.
@@ -109,3 +123,4 @@ The audit sink writes every verified entry to Cloud Logging with `jsonPayload.ge
 - [ ] Editing the finalized report directly in the console from a client identity is rejected by the rules.
 - [ ] Use *Run now* on a schedule. An archive entry appears, and an e-mail arrives if recipients are set.
 - [ ] Cloud Logging shows `audit …` entries, and the sink delivers them to the locked bucket.
+- [ ] If IRIS is enabled: **Test connection** reports the IRIS version. A first **Sync now** against a test IRIS instance completes without errors, and the pushed case appears in IRIS with the SOC id `GEYES-<n>`.
