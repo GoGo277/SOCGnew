@@ -43,6 +43,9 @@ test('provisions analysts with the temporary credential', async () => {
     await page.getByPlaceholder('email@company.com').fill(`${name}@soc.test`);
     await seen('12345a').waitFor();
     await page.getByRole('button', { name: 'Save Analyst' }).click();
+    const notice = page.getByRole('alertdialog');
+    await expect(notice).toContainText('Temporary password: 12345a');
+    await notice.getByRole('button', { name: 'OK' }).click();
     await expect(page.getByText(`${name}@soc.test`)).toBeVisible();
   }
 });
