@@ -44,6 +44,7 @@ import { realtimeStore } from './services/realtimeStore';
 import ReportCenter from './components/ReportCenter';
 import MfaSetupModal from './components/MfaSetupModal';
 import { cloudAuth } from './services/cloudAuth';
+import { useDfirData } from './hooks/useDfirData';
 import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
 import AuditLogPage from './components/AuditLogPage';
@@ -103,6 +104,8 @@ const App: React.FC = () => {
   const [reportArchive, setReportArchive] = useState<ArchivedReport[]>([]);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isMfaSetupOpen, setIsMfaSetupOpen] = useState(false);
+  const [focusAlertId, setFocusAlertId] = useState<string | null>(null);
+  const [focusCaseId, setFocusCaseId] = useState<string | null>(null);
 
   // Firestore real-time sync of the user registry & global settings.
   useEffect(() => settingsService.startCloudSync(), []);
@@ -114,6 +117,8 @@ const App: React.FC = () => {
       if (!fb && settingsService.getActiveSession()) { settingsService.logout(); setCurrentUser(null); }
     });
   }, []);
+
+  const dfir = useDfirData(!!currentUser && !currentUser.forcePasswordChange);
 
   // Real-time listeners for G-Eyes SR operational collections.
   useEffect(() => {
@@ -313,16 +318,6 @@ const App: React.FC = () => {
   const canManageSchedules = isAdmin || !!permissions.canManageSchedules;
   const sla = settings.sla ?? DEFAULT_SLA;
 
-  /** Persist an incident created from a shift event (escalation). */
-  const saveEscalatedIncident = async (data: Partial<Incident>): Promise<Incident> => {
-    const saved = incidentService.saveIncident(data as any);
-    const remote = await supabaseService.saveIncident(saved);
-    const finalSaved = remote || saved;
-    auditService.log(currentUser, 'CREATE_INCIDENT', { id: finalSaved.id, name: finalSaved.eventName }, { source: 'shift-escalation' });
-    await loadData();
-    return finalSaved;
-  };
-
   const openReport = (id: string) => { setFocusReportId(id); handleTabChange('shift-reports'); };
   const handoverStatus = handoverService.currentStatus(shiftReports, handoverAcks, dutySchedules, currentUser);
 
@@ -486,7 +481,8 @@ const App: React.FC = () => {
       case 'shift-reports': return (
         <ShiftReportsPage reports={shiftReports} acks={handoverAcks} schedules={dutySchedules} assets={assets} templates={reportTemplates} sla={sla}
           currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions}
-          focusReportId={focusReportId} onFocusConsumed={() => setFocusReportId(null)} onToast={showToast} saveIncident={saveEscalatedIncident} />
+          focusReportId={focusReportId} onFocusConsumed={() => setFocusReportId(null)} onToast={showToast}
+          alerts={dfir.alerts} cases={dfir.cases} onOpenAlert={id => { setFocusAlertId(id); handleTabChange('alerts'); }} />
       );
       case 'reporting': return (
         <ReportCenter schedules={reportSchedules} archive={reportArchive} templates={reportTemplates} reports={shiftReports} acks={handoverAcks} sla={sla}

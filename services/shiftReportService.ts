@@ -1,4 +1,5 @@
-import { Asset, EventStatus, Incident, IncidentStatus, ShiftEvent, ShiftReport, User } from '../types';
+import { Alert, Asset, EventStatus, ShiftEvent, ShiftReport, User } from '../types';
+import { alertService } from './alertService';
 import { ShiftId, getShift } from '../lib/shifts';
 import { isOpenItem } from '../lib/sla';
 import { shiftSortKey } from './analytics';
@@ -121,43 +122,17 @@ export const shiftReportService = {
   },
 
   /**
-   * Escalate a shift event into a tracked incident (Incidents module),
-   * linking it to known assets by IP, and record the link on the event.
+   * Escalate a shift event into the alert triage queue (IRIS-style alert with
+   * IOCs, linked inventory assets and shift provenance) and record the link.
    */
-  async escalate(
-    actor: User,
-    report: ShiftReport,
-    ev: ShiftEvent,
-    assets: Asset[],
-    saveIncident: (i: Partial<Incident>) => Promise<Incident>
-  ): Promise<Incident> {
+  async escalate(actor: User, report: ShiftReport, ev: ShiftEvent, assets: Asset[], customerId?: string): Promise<Alert> {
     assertDraft(report);
-    if (ev.escalatedIncidentId) throw new Error('Event already escalated');
-    const byIp = (ip: string) => assets.find(a => ip && (a.ipv4 === ip || a.ipv6 === ip));
-    const statusMap: Record<EventStatus, IncidentStatus> = { Open: 'Active', Contained: 'Mitigated', Resolved: 'Resolved', 'False Positive': 'Resolved' };
-    const shiftLabel = getShift(report.shift).label;
-    const incident = await saveIncident({
-      eventName: ev.eventName,
-      severity: ev.severity,
-      status: statusMap[ev.status ?? 'Open'],
-      sourceIp: ev.sourceIp,
-      destinationIp: ev.destinationIp,
-      sourceAssetName: byIp(ev.sourceIp)?.name ?? '',
-      destinationAssetName: byIp(ev.destinationIp)?.name ?? '',
-      description: [ev.investigation, ev.port ? `Target port: ${ev.port}${ev.protocol ? '/' + ev.protocol : ''}` : ''].filter(Boolean).join('\n\n'),
-      response: [ev.remediation, ev.conclusion].filter(Boolean).join('\n\n'),
-      tags: ['shift-escalation', ev.attackType, `report:${report.id}`, `event:${ev.rootEventId || ev.id}`].filter(Boolean),
-      notes: [{
-        id: crypto.randomUUID(),
-        analyst: actor.username,
-        content: `Escalated from ${shiftLabel} report ${report.date} (${report.id}). Detected ${new Date(ev.timestamp).toLocaleString()}, logged by ${ev.loggedBy}.`,
-        timestamp: new Date().toISOString(),
-      }],
-    });
-    const now = new Date().toISOString();
-    await shiftReportService.upsertEvent(actor, report, { ...ev, escalatedIncidentId: incident.id, escalatedAt: now, escalatedBy: actor.username, updatedAt: now }, report, true);
-    auditService.log(actor, 'EVENT_ESCALATED', { id: incident.id, name: ev.eventName }, { reportId: report.id, eventId: ev.id, severity: ev.severity });
-    return incident;
+    if (ev.escalatedAlertId || ev.escalatedIncidentId) throw new Error('Event already escalated');
+    const alert = await alertService.create(actor, alertService.fromShiftEvent(report, ev, assets, customerId));
+    const t = new Date().toISOString();
+    await shiftReportService.upsertEvent(actor, report, { ...ev, escalatedAlertId: alert.id, escalatedAt: t, escalatedBy: actor.username, updatedAt: t }, report, true);
+    auditService.log(actor, 'EVENT_ESCALATED', { id: alert.id, name: ev.eventName }, { reportId: report.id, eventId: ev.id, alertNumber: alert.number, severity: ev.severity });
+    return alert;
   },
 
   /** Sync a working draft without sealing it. */

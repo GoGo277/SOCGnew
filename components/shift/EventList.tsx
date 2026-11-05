@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Edit3, Trash2, Siren, CornerDownRight, ChevronDown, ExternalLink } from 'lucide-react';
-import { EventStatus, ShiftEvent, SlaPolicy } from '../../types';
+import { Alert, DfirCase, EventStatus, ShiftEvent, SlaPolicy } from '../../types';
+import { ALERT_STATUS_STYLE } from '../../lib/dfir';
 import { EVENT_STATUSES, EVENT_STATUS_STYLE, SLA_STYLE, evaluateSla, eventStatus, formatMinutes, SlaState } from '../../lib/sla';
 import { SEVERITY_STYLE } from '../../services/analytics';
 import { useT } from '../../i18n';
@@ -14,6 +15,9 @@ interface Props {
   onRemove: (e: ShiftEvent) => void;
   onStatus: (e: ShiftEvent, s: EventStatus) => void;
   onEscalate: (e: ShiftEvent) => void;
+  alerts?: Alert[];
+  cases?: DfirCase[];
+  onOpenAlert?: (id: string) => void;
 }
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -68,17 +72,25 @@ const Details: React.FC<{ e: ShiftEvent; sla: SlaPolicy }> = ({ e, sla }) => {
   );
 };
 
-const Markers: React.FC<{ e: ShiftEvent }> = ({ e }) => {
+const Markers: React.FC<{ e: ShiftEvent; alerts?: Alert[]; cases?: DfirCase[]; onOpenAlert?: (id: string) => void }> = ({ e, alerts = [], cases = [], onOpenAlert }) => {
   const t = useT();
+  const alert = e.escalatedAlertId ? alerts.find(a => a.id === e.escalatedAlertId) : undefined;
+  const linkedCase = alert?.caseId ? cases.find(c => c.id === alert.caseId) : undefined;
   return (
     <>
-      {e.carriedFromReportId && <span title={t('Carried over from {id}', { id: e.carriedFromReportId })} className="inline-flex items-center gap-0.5 text-[9px] px-1.5 rounded border border-violet-500/30 text-violet-300"><CornerDownRight className="w-2.5 h-2.5" />{t('Carried over')}</span>}
-      {e.escalatedIncidentId && <span title={t('Escalated by {user}', { user: e.escalatedBy ?? '' })} className="inline-flex items-center gap-0.5 text-[9px] px-1.5 rounded border border-red-500/30 text-red-300"><ExternalLink className="w-2.5 h-2.5" />{t('Incident')} {e.escalatedIncidentId.slice(0, 8)}</span>}
+      {e.carriedFromReportId && <span title={t('Carried over from {id}', { id: e.carriedFromReportId })} className="inline-flex items-center gap-0.5 text-[9px] px-1.5 rounded border border-violet-500/30 text-violet-400"><CornerDownRight className="w-2.5 h-2.5" />{t('Carried over')}</span>}
+      {e.escalatedIncidentId && <span title={t('Escalated by {user}', { user: e.escalatedBy ?? '' })} className="inline-flex items-center gap-0.5 text-[9px] px-1.5 rounded border border-red-500/30 text-red-400"><ExternalLink className="w-2.5 h-2.5" />{t('Incident')} {e.escalatedIncidentId.slice(0, 8)}</span>}
+      {e.escalatedAlertId && (
+        <button type="button" onClick={ev => { ev.stopPropagation(); onOpenAlert?.(e.escalatedAlertId!); }} title={t('Escalated by {user}', { user: e.escalatedBy ?? '' })}
+          className={`inline-flex items-center gap-0.5 text-[9px] px-1.5 rounded border ${alert ? ALERT_STATUS_STYLE[alert.status] : 'border-red-500/30 text-red-400'}`}>
+          <ExternalLink className="w-2.5 h-2.5" />{t('Alert')} #{alert?.number ?? '…'}{alert && ` · ${t(alert.status)}`}{linkedCase && ` → ${t('Case')} #${linkedCase.number}`}
+        </button>
+      )}
     </>
   );
 };
 
-const EventList: React.FC<Props> = ({ events, sla, editable, canEscalate, onEdit, onRemove, onStatus, onEscalate }) => {
+const EventList: React.FC<Props> = ({ events, sla, editable, canEscalate, onEdit, onRemove, onStatus, onEscalate, alerts, cases, onOpenAlert }) => {
   const t = useT();
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -86,8 +98,8 @@ const EventList: React.FC<Props> = ({ events, sla, editable, canEscalate, onEdit
 
   const actions = (e: ShiftEvent) => editable && (
     <div className="flex justify-end gap-1" onClick={ev => ev.stopPropagation()}>
-      {canEscalate && !e.escalatedIncidentId && (e.severity === 'Critical' || e.severity === 'High' || eventStatus(e) === 'Open') && (
-        <button aria-label={t('Escalate to incident')} title={t('Escalate to incident')} onClick={() => onEscalate(e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400"><Siren className="w-4 h-4" /></button>
+      {canEscalate && !e.escalatedIncidentId && !e.escalatedAlertId && (e.severity === 'Critical' || e.severity === 'High' || eventStatus(e) === 'Open') && (
+        <button aria-label={t('Escalate to alert')} title={t('Escalate to alert')} onClick={() => onEscalate(e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400"><Siren className="w-4 h-4" /></button>
       )}
       <button aria-label={t('Edit event')} title={t('Edit event')} onClick={() => onEdit(e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-blue-400"><Edit3 className="w-4 h-4" /></button>
       <button aria-label={t('Remove event')} title={t('Remove event')} onClick={() => onRemove(e)} className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
@@ -110,7 +122,7 @@ const EventList: React.FC<Props> = ({ events, sla, editable, canEscalate, onEdit
                   <td className="p-3 text-xs font-mono text-zinc-400 whitespace-nowrap">{fmtTime(e.timestamp)}</td>
                   <td className="p-3"><span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${SEVERITY_STYLE[e.severity].badge}`}>{t(e.severity)}</span></td>
                   <td className="p-3"><StatusControl e={e} editable={editable} onStatus={s => onStatus(e, s)} /></td>
-                  <td className="p-3"><p className="text-sm font-bold text-zinc-200">{e.eventName}</p><div className="flex flex-wrap items-center gap-1 mt-0.5"><span className="text-[10px] text-zinc-500">{e.attackType || t('Unclassified')}</span><Markers e={e} /></div></td>
+                  <td className="p-3"><p className="text-sm font-bold text-zinc-200">{e.eventName}</p><div className="flex flex-wrap items-center gap-1 mt-0.5"><span className="text-[10px] text-zinc-500">{e.attackType || t('Unclassified')}</span><Markers e={e} alerts={alerts} cases={cases} onOpenAlert={onOpenAlert} /></div></td>
                   <td className="p-3 text-xs font-mono whitespace-nowrap"><span className="text-red-400/80">{e.sourceIp || '—'}</span> <span className="text-zinc-600">→</span> <span className="text-blue-400/80">{e.destinationIp || '—'}</span>{e.port && <span className="text-zinc-500">:{e.port}</span>}</td>
                   <td className="p-3"><SlaBadge e={e} sla={sla} /></td>
                   <td className="p-3 text-xs text-zinc-400">{e.loggedBy}</td>
@@ -138,7 +150,7 @@ const EventList: React.FC<Props> = ({ events, sla, editable, canEscalate, onEdit
               <span className={`text-[10px] px-2 py-0.5 rounded border font-black uppercase ${SEVERITY_STYLE[e.severity].badge}`}>{t(e.severity)}</span>
               <StatusControl e={e} editable={editable} onStatus={s => onStatus(e, s)} />
               <SlaBadge e={e} sla={sla} />
-              <Markers e={e} />
+              <Markers e={e} alerts={alerts} cases={cases} onOpenAlert={onOpenAlert} />
             </div>
             <p className="text-xs font-mono break-all"><span className="text-red-400/80">{e.sourceIp || '—'}</span> → <span className="text-blue-400/80">{e.destinationIp || '—'}</span>{e.port && <span className="text-zinc-500">:{e.port}</span>}</p>
             {expanded === e.id && <div className="pt-2"><Details e={e} sla={sla} /></div>}

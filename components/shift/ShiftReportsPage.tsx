@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useEscape } from '../../lib/useEscape';
 import { Plus, Search, Download, BarChart3, CheckSquare, Square, Crosshair, X, CheckCircle2, Hourglass } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from 'recharts';
-import { Asset, DutySchedule, HandoverAck, Incident, ReportTemplate, RolePermissions, ShiftReport, SlaPolicy, User } from '../../types';
+import { Alert, Asset, DfirCase, DutySchedule, HandoverAck, ReportTemplate, RolePermissions, ShiftReport, SlaPolicy, User } from '../../types';
 import { SHIFTS, ShiftId, getActiveShift, getShift, toDateKey } from '../../lib/shifts';
 import { shiftReportService, reportId } from '../../services/shiftReportService';
 import { handoverService } from '../../services/handoverService';
@@ -25,13 +25,15 @@ interface Props {
   focusReportId?: string | null;
   onFocusConsumed?: () => void;
   onToast: (msg: string) => void;
-  saveIncident: (i: Partial<Incident>) => Promise<Incident>;
+  alerts: Alert[];
+  cases: DfirCase[];
+  onOpenAlert?: (id: string) => void;
 }
 
 const breachCount = (r: ShiftReport, sla: SlaPolicy) =>
   r.events.filter(e => { const s = evaluateSla(e, sla); return s.contain === 'breached' || s.resolve === 'breached'; }).length;
 
-const ShiftReportsPage: React.FC<Props> = ({ reports, acks, schedules, assets, templates, sla, currentUser, permissions, focusReportId, onFocusConsumed, onToast, saveIncident }) => {
+const ShiftReportsPage: React.FC<Props> = ({ reports, acks, schedules, assets, templates, sla, currentUser, permissions, focusReportId, onFocusConsumed, onToast, alerts, cases, onOpenAlert }) => {
   const t = useT();
   const [openId, setOpenId] = useState<string | null>(null);
   const [preset, setPreset] = useState<RangePreset>('30d');
@@ -79,7 +81,7 @@ const ShiftReportsPage: React.FC<Props> = ({ reports, acks, schedules, assets, t
     return (
       <>
         <ShiftReportEditor report={openReport} reports={reports} acks={acks} assets={assets} sla={sla} currentUser={currentUser} permissions={permissions}
-          onBack={() => setOpenId(null)} onToast={onToast} onExport={() => setExportFor([openReport])} saveIncident={saveIncident} />
+          onBack={() => setOpenId(null)} onToast={onToast} onExport={() => setExportFor([openReport])} alerts={alerts} cases={cases} onOpenAlert={onOpenAlert} />
         {customizer}
       </>
     );

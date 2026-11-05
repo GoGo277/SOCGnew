@@ -1,5 +1,5 @@
 import {
-  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs,
+  collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs, runTransaction,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -98,6 +98,23 @@ export const realtimeStore = {
     if (idx === -1) throw new Error(`Document ${col}/${id} not found`);
     docs[idx] = { ...docs[idx], ...clean(patch) };
     writeLocal(col, docs);
+  },
+
+  /** Monotonic counter (case / alert numbers). Transactional in Firestore. */
+  async nextSequence(name: string): Promise<number> {
+    if (db) {
+      const ref = doc(db, 'counters', name);
+      return runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const next = (snap.exists() ? (snap.data().value as number) : 0) + 1;
+        tx.set(ref, { value: next });
+        return next;
+      });
+    }
+    const key = `geyes_seq_${name}`;
+    const next = (Number(localStorage.getItem(key)) || 0) + 1;
+    localStorage.setItem(key, String(next));
+    return next;
   },
 
   async remove(col: string, id: string): Promise<void> {

@@ -150,6 +150,80 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- Case management (DFIR-IRIS compatible) ---------------------------
+    match /customers/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    match /case_templates/{id} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    match /cases/{caseId} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && incoming().id == caseId
+        && incoming().number is int
+        && incoming().state == 'Open'
+        && incoming().openedBy == uname();
+      allow update: if isMember()
+        && incoming().id == resource.data.id
+        && incoming().number == resource.data.number
+        && incoming().openedAt == resource.data.openedAt
+        // closing requires an outcome
+        && (incoming().state != 'Closed' || incoming().outcome != 'Unknown');
+      allow delete: if isAdmin();
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isMember();
+      allow create: if isMember() && incoming().id == alertId && incoming().number is int && incoming().createdBy == uname();
+      allow update: if isMember()
+        && incoming().id == resource.data.id
+        && incoming().number == resource.data.number
+        && incoming().createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+
+    match /case_iocs/{id} { allow read: if isMember(); allow create, update: if isMember() && incoming().caseId is string; allow delete: if isMember(); }
+    match /case_assets/{id} { allow read: if isMember(); allow create, update: if isMember() && incoming().caseId is string; allow delete: if isMember(); }
+    match /case_timeline/{id} { allow read: if isMember(); allow create, update: if isMember() && incoming().caseId is string; allow delete: if isMember(); }
+    match /case_notes/{id} { allow read: if isMember(); allow create, update: if isMember() && incoming().caseId is string; allow delete: if isMember(); }
+    match /case_tasks/{id} { allow read: if isMember(); allow create, update: if isMember() && incoming().caseId is string; allow delete: if isMember(); }
+
+    // Evidence: chain of custody can only grow; the file hash never changes.
+    match /case_evidence/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && incoming().caseId is string && incoming().sha256 is string && incoming().custody is list;
+      allow update: if isMember()
+        && incoming().sha256 == resource.data.sha256
+        && incoming().custody.size() >= resource.data.custody.size();
+      allow delete: if isAdmin();
+    }
+
+    // Case activity feed is append-only.
+    match /case_activity/{id} {
+      allow read: if isMember();
+      allow create: if isMember() && incoming().by == uname();
+      allow update, delete: if false;
+    }
+
+    // Monotonic sequence counters (case / alert numbers): +1 only.
+    match /counters/{name} {
+      allow read: if isMember();
+      allow create: if isMember() && name in ['case', 'alert'] && incoming().value == 1;
+      allow update: if isMember() && incoming().value == resource.data.value + 1;
+      allow delete: if false;
+    }
+
+    // IRIS connector state is server-managed.
+    match /integrations/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // mail, login_failure_rate and everything else: server only.
     match /{document=**} {
       allow read, write: if false;

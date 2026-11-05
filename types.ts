@@ -255,6 +255,8 @@ export interface ShiftEvent {
   carriedFromReportId?: string;
   carriedFromEventId?: string;
   escalatedIncidentId?: string;
+  /** Alert created from this event (alert triage queue). */
+  escalatedAlertId?: string;
   escalatedAt?: string;
   escalatedBy?: string;
 }
@@ -393,4 +395,202 @@ export interface ReportExportOptions {
   includeAnalytics: boolean;
   includeIntegrity: boolean;
   customSections: CustomSection[];
+}
+
+// ---------------------------------------------------------------------------
+// Case management (DFIR-IRIS compatible model)
+// ---------------------------------------------------------------------------
+
+/** Link between a local record and its DFIR-IRIS counterpart. */
+export interface IrisLink {
+  remoteId?: number;
+  syncedAt?: string;
+  /** Hash of the last pushed payload — avoids redundant writes. */
+  pushedHash?: string;
+  /** Remote modification marker seen at the last pull. */
+  remoteVersion?: string;
+  error?: string;
+  /** Where the record was created. */
+  origin?: 'geyes' | 'iris';
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  description: string;
+  contacts: string;
+  createdAt: string;
+  createdBy: string;
+  iris?: IrisLink;
+}
+
+export type CaseState = 'Open' | 'In progress' | 'Containment' | 'Eradication' | 'Recovery' | 'Post-incident' | 'Reporting' | 'Closed';
+export type CaseOutcome = 'Unknown' | 'False positive' | 'True positive with impact' | 'True positive without impact' | 'Not applicable' | 'Legitimate';
+
+export interface DfirCase {
+  id: string;
+  number: number;
+  name: string;
+  description: string;
+  customerId: string;
+  state: CaseState;
+  severity: Severity;
+  classification: string;
+  outcome: CaseOutcome;
+  ownerId?: string;
+  ownerName?: string;
+  tags: string[];
+  socId?: string;
+  openedAt: string;
+  openedBy: string;
+  closedAt?: string;
+  closedBy?: string;
+  updatedAt: string;
+  updatedBy: string;
+  sourceAlertIds: string[];
+  templateId?: string;
+  iris?: IrisLink;
+}
+
+interface CaseObjectBase {
+  id: string;
+  caseId: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  iris?: IrisLink;
+}
+
+export type IocType = 'ip-src' | 'ip-dst' | 'domain' | 'hostname' | 'url' | 'md5' | 'sha1' | 'sha256' | 'filename' | 'email-src' | 'account' | 'user-agent' | 'other';
+export type Tlp = 'TLP:CLEAR' | 'TLP:GREEN' | 'TLP:AMBER' | 'TLP:RED';
+
+export interface CaseIoc extends CaseObjectBase {
+  type: IocType;
+  value: string;
+  description: string;
+  tlp: Tlp;
+  tags: string[];
+}
+
+export type CompromiseStatus = 'To be determined' | 'Compromised' | 'Not compromised' | 'Unknown';
+export type AnalysisStatus = 'Unspecified' | 'To be done' | 'Started' | 'Pending' | 'Done';
+
+export interface CaseAsset extends CaseObjectBase {
+  name: string;
+  type: string;
+  ip: string;
+  domain: string;
+  description: string;
+  compromiseStatus: CompromiseStatus;
+  analysisStatus: AnalysisStatus;
+  tags: string[];
+}
+
+export interface CaseTimelineEvent extends CaseObjectBase {
+  title: string;
+  date: string; // ISO
+  category: string;
+  content: string;
+  raw: string;
+  source: string;
+  assetIds: string[];
+  iocIds: string[];
+  inSummary: boolean;
+  tags: string[];
+}
+
+export interface CustodyEntry { at: string; by: string; action: string }
+
+export interface CaseEvidence extends CaseObjectBase {
+  filename: string;
+  size: number;
+  sha256: string;
+  type: string;
+  description: string;
+  custody: CustodyEntry[];
+}
+
+export interface CaseNote extends CaseObjectBase {
+  directory: string;
+  title: string;
+  content: string; // markdown
+}
+
+export type CaseTaskStatus = 'To do' | 'In progress' | 'On hold' | 'Done' | 'Canceled';
+
+export interface CaseTask extends CaseObjectBase {
+  title: string;
+  description: string;
+  status: CaseTaskStatus;
+  assigneeIds: string[];
+  dueDate?: string;
+  tags: string[];
+}
+
+export interface CaseActivity {
+  id: string;
+  caseId: string;
+  at: string;
+  by: string;
+  action: string;
+  detail: string;
+}
+
+export type CaseObjectKind = 'iocs' | 'assets' | 'timeline' | 'evidence' | 'notes' | 'tasks';
+export interface CaseObjectMap {
+  iocs: CaseIoc;
+  assets: CaseAsset;
+  timeline: CaseTimelineEvent;
+  evidence: CaseEvidence;
+  notes: CaseNote;
+  tasks: CaseTask;
+}
+
+export type AlertStatus = 'New' | 'Assigned' | 'In progress' | 'Pending' | 'Closed' | 'Merged' | 'Escalated';
+
+export interface AlertIoc { type: IocType; value: string; description: string; tlp: Tlp }
+export interface AlertAsset { name: string; type: string; ip: string; description: string }
+
+export interface Alert {
+  id: string;
+  number: number;
+  title: string;
+  description: string;
+  severity: Severity;
+  status: AlertStatus;
+  resolution?: CaseOutcome;
+  source: string;
+  sourceRef: string;
+  sourceLink?: string;
+  eventTime: string;
+  customerId: string;
+  classification: string;
+  ownerId?: string;
+  ownerName?: string;
+  tags: string[];
+  iocs: AlertIoc[];
+  assets: AlertAsset[];
+  note: string;
+  caseId?: string;
+  shiftRef?: { reportId: string; eventId: string; rootEventId: string };
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  iris?: IrisLink;
+}
+
+export interface CaseTemplate {
+  id: string;
+  name: string;
+  description: string;
+  classification: string;
+  severity: Severity;
+  tags: string[];
+  tasks: { title: string; description: string }[];
+  notes: { directory: string; title: string; content: string }[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }

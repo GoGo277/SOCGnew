@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { uiConfirm, uiPrompt } from '../../lib/dialogs';
 import { useEscape } from '../../lib/useEscape';
 import { ArrowLeft, Clock, CloudUpload, Download, Lock, Trash2, Users, ShieldCheck, ShieldX, Plus, Crosshair, AlertTriangle, CornerDownRight, CheckCircle2, Hourglass } from 'lucide-react';
-import { Asset, EventStatus, HandoverAck, Incident, RolePermissions, ShiftEvent, ShiftReport, SlaPolicy, User } from '../../types';
+import { Alert, Asset, DfirCase, EventStatus, HandoverAck, RolePermissions, ShiftEvent, ShiftReport, SlaPolicy, User } from '../../types';
 import { getShift } from '../../lib/shifts';
 import { shiftReportService } from '../../services/shiftReportService';
 import { computeMetrics } from '../../services/analytics';
@@ -22,7 +22,9 @@ export interface EditorProps {
   onBack: () => void;
   onToast: (msg: string) => void;
   onExport: () => void;
-  saveIncident: (i: Partial<Incident>) => Promise<Incident>;
+  alerts: Alert[];
+  cases: DfirCase[];
+  onOpenAlert?: (id: string) => void;
 }
 
 export const ReportStatusBadge: React.FC<{ r: ShiftReport }> = ({ r }) => {
@@ -32,13 +34,13 @@ export const ReportStatusBadge: React.FC<{ r: ShiftReport }> = ({ r }) => {
     : <span className="inline-flex items-center gap-1 text-[9px] px-2 py-0.5 rounded font-black border uppercase tracking-widest bg-amber-500/10 text-amber-400 border-amber-500/30">{t('Draft')}</span>;
 };
 
-const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, assets, sla, currentUser, permissions, onBack, onToast, onExport, saveIncident }) => {
+const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, assets, sla, currentUser, permissions, onBack, onToast, onExport, alerts, cases, onOpenAlert }) => {
   const t = useT();
   const locked = report.status === 'finalized';
   const canLog = permissions.canLogShiftEvents !== false && !locked;
   const canFinalize = permissions.canFinalizeReports !== false && !locked;
   const canDelete = !!permissions.canDeleteReports;
-  const canEscalate = permissions.canCreateIncident !== false;
+  const canEscalate = permissions.canLogShiftEvents !== false;
 
   const [title, setTitle] = useState(report.title);
   const [summary, setSummary] = useState(report.summary);
@@ -108,9 +110,9 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
     guard(() => shiftReportService.setEventStatus(currentUser, latestRef.current, ev, st), t('Status set to {s}', { s: t(st) }));
 
   const escalate = (ev: ShiftEvent) => guard(async () => {
-    const inc = await shiftReportService.escalate(currentUser, latestRef.current, ev, assets, saveIncident);
+    const alert = await shiftReportService.escalate(currentUser, latestRef.current, ev, assets);
     setEscalating(null);
-    onToast(t('Incident {id} created', { id: inc.id.slice(0, 8) }));
+    onToast(t('Alert #{n} created', { n: alert.number }));
   });
 
   const carrySource = useMemo(() => (locked ? undefined : shiftReportService.carryOverSource(reports, report.date, report.shift)), [locked, reports, report.date, report.shift]);
@@ -219,7 +221,8 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
           {canLog && <button onClick={() => setEventForm({ open: true, event: null })} className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-2"><Plus className="w-4 h-4" /> {t('Log event')}</button>}
         </div>
         <EventList events={report.events} sla={sla} editable={canLog} canEscalate={canEscalate}
-          onEdit={e => setEventForm({ open: true, event: e })} onRemove={removeEvent} onStatus={setStatus} onEscalate={setEscalating} />
+          onEdit={e => setEventForm({ open: true, event: e })} onRemove={removeEvent} onStatus={setStatus} onEscalate={setEscalating}
+          alerts={alerts} cases={cases} onOpenAlert={onOpenAlert} />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
@@ -236,8 +239,8 @@ const ShiftReportEditor: React.FC<EditorProps> = ({ report, reports, acks, asset
       {eventForm.open && <ShiftEventForm event={eventForm.event} currentUser={currentUser} defaultDate={report.date} sla={sla} onSave={saveEvent} onCancel={() => setEventForm({ open: false, event: null })} />}
 
       {escalating && (
-        <Confirm title={t('Escalate to incident?')} confirmLabel={t('Create incident')} tone="red" busy={busy} onCancel={() => setEscalating(null)} onConfirm={() => escalate(escalating)}>
-          <p>{t('A tracked incident will be created in the Incidents module from "{name}" and linked to this event.', { name: escalating.eventName })}</p>
+        <Confirm title={t('Escalate to an alert?')} confirmLabel={t('Create alert')} tone="red" busy={busy} onCancel={() => setEscalating(null)} onConfirm={() => escalate(escalating)}>
+          <p>{t('An alert will be added to the triage queue from "{name}", with its IPs as IOCs, and linked to this event.', { name: escalating.eventName })}</p>
           {(() => {
             const match = (ip: string) => assets.find(a => ip && (a.ipv4 === ip || a.ipv6 === ip))?.name;
             const s = match(escalating.sourceIp), d = match(escalating.destinationIp);
