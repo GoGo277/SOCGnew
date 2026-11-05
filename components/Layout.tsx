@@ -5,7 +5,7 @@ import {
   Settings, ClipboardList, BookOpen, ChevronLeft, 
   ChevronRight, Bell, User as UserIcon, ShieldAlert,
   MessageSquare, Megaphone, UserCircle, CheckSquare,
-  ShieldCheck, RefreshCw, Zap, CalendarDays, FileText, BarChart3, ScrollText, KeyRound
+  ShieldCheck, RefreshCw, Zap, CalendarDays, FileText, BarChart3, ScrollText, KeyRound, CalendarClock
 } from 'lucide-react';
 import { backendLabel } from '../lib/firebase';
 import { User, AppSettings } from '../types';
@@ -57,6 +57,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'duty', label: t('duty'), icon: CalendarDays, color: 'text-cyan-400', visible: permissions.visiblePages.duty !== false },
     { id: 'shift-reports', label: t('shift-reports'), icon: FileText, color: 'text-red-400', visible: permissions.visiblePages.shiftReports !== false },
     { id: 'executive', label: t('executive'), icon: BarChart3, color: 'text-indigo-400', visible: permissions.visiblePages.executive !== false },
+    { id: 'reporting', label: t('Report Center'), icon: CalendarClock, color: 'text-blue-400', visible: permissions.canExportReports !== false },
     { id: 'assets', label: t('assets'), icon: Database, color: 'text-blue-400', visible: permissions.visiblePages.assets },
     { id: 'incidents', label: t('incidents'), icon: Activity, color: 'text-red-400', visible: permissions.visiblePages.incidents },
     { id: 'tasks', label: t('tasks'), icon: CheckSquare, color: 'text-cyan-400', visible: permissions.visiblePages.tasks },
@@ -83,6 +84,7 @@ const Layout: React.FC<LayoutProps> = ({
       case 'shift-reports': return t('shift-reports');
       case 'executive': return t('executive');
       case 'audit': return t('audit');
+      case 'reporting': return t('Report Center');
       case 'assets': return t('assets');
       case 'incidents': return t('incidents');
       case 'tasks': return t('mission_control');

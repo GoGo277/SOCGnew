@@ -38,12 +38,16 @@ import ShiftReportsPage from './components/shift/ShiftReportsPage';
 import HandoverPanel from './components/shift/HandoverPanel';
 import { handoverService } from './services/handoverService';
 import { templateService } from './services/templateService';
+import { swapService } from './services/swapService';
+import { scheduleService } from './services/scheduleService';
+import { realtimeStore } from './services/realtimeStore';
+import ReportCenter from './components/ReportCenter';
 import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
 import AuditLogPage from './components/AuditLogPage';
 import { dutyService } from './services/dutyService';
 import { shiftReportService } from './services/shiftReportService';
-import { DutySchedule, ShiftReport, HandoverAck, ReportTemplate } from './types';
+import { DutySchedule, ShiftReport, HandoverAck, ReportTemplate, ShiftSwapRequest, ReportSchedule, ArchivedReport } from './types';
 import { I18nProvider } from './i18n';
 import { Plus, Tag as TagIcon, Search, SlidersHorizontal, Activity, ArrowRight, Download, Upload, Trash2, Edit3 } from 'lucide-react';
 import { ASSET_TYPE_ICONS, ASSET_TYPES, ASSET_TYPE_COLORS } from './constants';
@@ -92,6 +96,9 @@ const App: React.FC = () => {
   const [handoverAcks, setHandoverAcks] = useState<HandoverAck[]>([]);
   const [reportTemplates, setReportTemplates] = useState<ReportTemplate[]>([]);
   const [focusReportId, setFocusReportId] = useState<string | null>(null);
+  const [swaps, setSwaps] = useState<ShiftSwapRequest[]>([]);
+  const [reportSchedules, setReportSchedules] = useState<ReportSchedule[]>([]);
+  const [reportArchive, setReportArchive] = useState<ArchivedReport[]>([]);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Firestore real-time sync of the user registry & global settings.
@@ -105,9 +112,27 @@ const App: React.FC = () => {
       shiftReportService.subscribe(setShiftReports),
       handoverService.subscribe(setHandoverAcks),
       templateService.subscribe(setReportTemplates),
+      swapService.subscribe(setSwaps),
+      scheduleService.subscribe(setReportSchedules),
+      scheduleService.subscribeArchive(setReportArchive),
       auditService.subscribe(setAuditLogs),
     ];
     return () => unsubs.forEach(u => u());
+  }, [currentUser?.id]);
+
+  // Local-mode report scheduler (cloud mode runs the scheduled Cloud Function instead).
+  const schedulerCtx = useRef({ reports: shiftReports, acks: handoverAcks, templates: reportTemplates, schedules: reportSchedules, sla: settings.sla });
+  schedulerCtx.current = { reports: shiftReports, acks: handoverAcks, templates: reportTemplates, schedules: reportSchedules, sla: settings.sla };
+  useEffect(() => {
+    if (!currentUser || realtimeStore.isCloud()) return;
+    const tick = () => {
+      const c = schedulerCtx.current;
+      scheduleService.runDue(c.schedules, { reports: c.reports, acks: c.acks, templates: c.templates, sla: c.sla ?? DEFAULT_SLA })
+        .catch(e => console.error('Scheduled report run failed', e));
+    };
+    const first = setTimeout(tick, 5000);
+    const id = setInterval(tick, 60_000);
+    return () => { clearTimeout(first); clearInterval(id); };
   }, [currentUser?.id]);
 
   const t = useMemo(() => getTranslator(settings.language), [settings.language]);
@@ -235,9 +260,10 @@ const App: React.FC = () => {
       }
     });
     counts['messaging'] = unreadMessages;
+    if (currentUser) counts['duty'] = swapService.actionCount(swaps, currentUser, currentUser.role === 'Admin');
     if (counts[activeTab] !== undefined) counts[activeTab] = 0;
     return counts;
-  }, [requests, assets, incidents, announcements, guidelines, lastSeen, currentUser, activeTab]);
+  }, [requests, assets, incidents, announcements, guidelines, lastSeen, currentUser, activeTab, swaps]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -445,11 +471,15 @@ const App: React.FC = () => {
           <Dashboard assets={assets} incidents={incidents} tasks={tasks} requests={requests} announcements={announcements} guidelines={guidelines} auditLogs={auditLogs} language={settings.language} />
         </div>
       );
-      case 'duty': return <MonthlySchedule schedules={dutySchedules} users={users} currentUser={currentUser} canManage={canManageSchedules} onToast={showToast} />;
+      case 'duty': return <MonthlySchedule schedules={dutySchedules} users={users} swaps={swaps} currentUser={currentUser} canManage={canManageSchedules} onToast={showToast} />;
       case 'shift-reports': return (
         <ShiftReportsPage reports={shiftReports} acks={handoverAcks} schedules={dutySchedules} assets={assets} templates={reportTemplates} sla={sla}
           currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions}
           focusReportId={focusReportId} onFocusConsumed={() => setFocusReportId(null)} onToast={showToast} saveIncident={saveEscalatedIncident} />
+      );
+      case 'reporting': return (
+        <ReportCenter schedules={reportSchedules} archive={reportArchive} templates={reportTemplates} reports={shiftReports} acks={handoverAcks} sla={sla}
+          currentUser={currentUser} canManage={isAdmin} onToast={showToast} />
       );
       case 'executive': return <ExecutiveReview reports={shiftReports} acks={handoverAcks} sla={sla} currentUser={currentUser} />;
       case 'audit': return (isAdmin || permissions.canViewAuditLog) ? <AuditLogPage logs={auditLogs} currentUser={currentUser} onToast={showToast} /> : null;

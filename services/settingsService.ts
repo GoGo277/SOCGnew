@@ -16,7 +16,7 @@ export const MAX_FAILED_LOGINS = 5;
 export const LOCKOUT_MINUTES = 15;
 export const SESSION_TTL_HOURS = 12;
 
-export const DEFAULT_NAV_ORDER = ['dashboard', 'duty', 'shift-reports', 'executive', 'incidents', 'assets', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests', 'admin-requests', 'audit'];
+export const DEFAULT_NAV_ORDER = ['dashboard', 'duty', 'shift-reports', 'executive', 'reporting', 'incidents', 'assets', 'tasks', 'announcements', 'messaging', 'guidelines', 'requests', 'admin-requests', 'audit'];
 
 const DEFAULT_SETTINGS: AppSettings = {
   appName: 'G-Eyes SR',
