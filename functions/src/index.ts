@@ -7,6 +7,7 @@ import { onAuditLogCreated as auditSink } from './reports';
 
 export { provisionUser, updateUserAccount, resetUserPassword, resetUserMfa, deleteUserAccount, changePassword, recordLoginFailure } from './users';
 export { finalizeShiftReport, runScheduledReports } from './reports';
+export { irisStatus, irisTestConnection, irisSaveOptions, irisSyncNow, irisScheduledSync } from './iris';
 
 /**
  * GEYES_DISABLE_TRIGGERS=1 omits the Firestore trigger in emulator runs behind

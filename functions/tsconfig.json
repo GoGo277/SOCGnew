@@ -10,5 +10,5 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["src", "../lib/integrity.ts", "../lib/scheduling.ts", "../lib/markdown.ts", "../services/briefService.ts", "../services/reportMarkdown.ts"]
+  "include": ["src", "../lib/integrity.ts", "../lib/scheduling.ts", "../lib/markdown.ts", "../services/briefService.ts", "../services/reportMarkdown.ts", "../lib/iris/client.ts", "../lib/iris/mapping.ts", "../lib/iris/sync.ts", "../lib/collections.ts"]
 }

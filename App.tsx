@@ -51,6 +51,8 @@ import CustomersPage from './components/dfir/CustomersPage';
 import CaseTemplatesPage from './components/dfir/CaseTemplatesPage';
 import InvestigationOverview from './components/dfir/InvestigationOverview';
 import GlobalSearch from './components/dfir/GlobalSearch';
+import IntegrationsPage from './components/dfir/IntegrationsPage';
+import { irisService } from './services/irisService';
 import { caseReportService, CaseReportTemplate, BUILTIN_TEMPLATE } from './services/caseReport';
 import { DEFAULT_SLA } from './lib/sla';
 import ExecutiveReview from './components/ExecutiveReview';
@@ -126,6 +128,26 @@ const App: React.FC = () => {
   }, []);
 
   const dfir = useDfirData(!!currentUser && !currentUser.forcePasswordChange);
+  const [irisConfigured, setIrisConfigured] = useState(false);
+  useEffect(() => {
+    if (!currentUser || currentUser.forcePasswordChange) return;
+    const check = () => {
+      if (realtimeStore.isCloud()) { setIrisConfigured(true); return; } // server decides; callables report if unconfigured
+      irisService.status().then(s => setIrisConfigured(s.configured));
+    };
+    check();
+    return irisService.onChange(check);
+  }, [currentUser?.id, currentUser?.forcePasswordChange]);
+
+  // Local-mode automatic IRIS sync (cloud mode uses the scheduled Cloud Function).
+  useEffect(() => {
+    if (!currentUser || realtimeStore.isCloud() || !irisConfigured) return;
+    const cfg = irisService.getLocalConfig();
+    if (!cfg?.autoSyncMinutes) return;
+    const id = setInterval(() => { irisService.syncNow(currentUser).catch(e => console.warn('IRIS auto-sync failed', e)); }, cfg.autoSyncMinutes * 60_000);
+    return () => clearInterval(id);
+  }, [currentUser?.id, irisConfigured]);
+
   const [caseReportTemplates, setCaseReportTemplates] = useState<CaseReportTemplate[]>([BUILTIN_TEMPLATE]);
   useEffect(() => (currentUser ? caseReportService.subscribe(setCaseReportTemplates) : undefined), [currentUser?.id]);
 
@@ -498,7 +520,9 @@ const App: React.FC = () => {
           alerts={dfir.alerts} cases={dfir.cases} onOpenAlert={openAlert} />
       );
       case 'alerts': return <AlertsPage data={dfir} users={users} currentUser={currentUser} focusAlertId={focusAlertId} onFocusConsumed={() => setFocusAlertId(null)} onOpenCase={openCase} onOpenReport={openReport} onToast={showToast} />;
-      case 'cases': return <CasesPage data={dfir} users={users} currentUser={currentUser} reportTemplates={caseReportTemplates} focusCaseId={focusCaseId} onFocusConsumed={() => setFocusCaseId(null)} onOpenAlert={openAlert} onToast={showToast} />;
+      case 'cases': return <CasesPage data={dfir} users={users} currentUser={currentUser} reportTemplates={caseReportTemplates} focusCaseId={focusCaseId} onFocusConsumed={() => setFocusCaseId(null)} onOpenAlert={openAlert} onToast={showToast}
+        iris={{ enabled: irisConfigured, sync: async c => irisService.summarize(await irisService.syncNow(currentUser, [c.id])) }} />;
+      case 'integrations': return isAdmin ? <IntegrationsPage currentUser={currentUser} onToast={showToast} /> : null;
       case 'customers': return <CustomersPage data={dfir} currentUser={currentUser} onToast={showToast} />;
       case 'case-templates': return <CaseTemplatesPage data={dfir} reportTemplates={caseReportTemplates} currentUser={currentUser} onToast={showToast} />;
       case 'reporting': return (
