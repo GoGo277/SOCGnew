@@ -1,11 +1,12 @@
 
 import React, { useState, useRef, useMemo } from 'react';
 import { AppSettings, User, UserRole, RolePermissions, Language } from '../types';
-import { settingsService } from '../services/settingsService';
+import { settingsService, TEMP_PASSWORD } from '../services/settingsService';
+import { auditService } from '../services/auditService';
 import { 
   Settings, Users, Shield, Save, Plus, Trash2, Edit3, 
   Image as ImageIcon, Upload, CheckSquare, Square, Globe, ArrowUp, ArrowDown,
-  Layers, Key, Mail, UserCircle, Eye, X, Database, Download, FileJson, AlertTriangle
+  Layers, Key, Mail, UserCircle, Eye, X, Database, Download, FileJson, AlertTriangle, RotateCcw, Unlock, Ban, CheckCircle2
 } from 'lucide-react';
 import { getTranslator } from '../translations';
 
@@ -14,9 +15,11 @@ interface SettingsPageProps {
   users: User[];
   onSettingsUpdate: (settings: AppSettings) => void;
   onUsersUpdate: (users: User[]) => void;
+  currentUser: User;
 }
 
-const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettingsUpdate, onUsersUpdate }) => {
+const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettingsUpdate, onUsersUpdate, currentUser }) => {
+  const [userError, setUserError] = useState('');
   const t = useMemo(() => getTranslator(settings.language), [settings.language]);
   const [activeSubTab, setActiveSubTab] = useState<'general' | 'users' | 'roles' | 'system'>('general');
   const [appName, setAppName] = useState(settings.appName);
@@ -35,12 +38,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
   const handleSaveGeneral = () => {
     const updated = { ...settings, appName, logoUrl, language: currentLang, navOrder };
     settingsService.saveSettings(updated);
+    auditService.log(currentUser, 'SETTINGS_CHANGED', { id: 'general', name: 'General settings' }, { appName, language: currentLang });
     onSettingsUpdate(updated);
   };
 
   const handleSaveRoles = () => {
     const updated = { ...settings, rolePermissions: localRoles };
     settingsService.saveSettings(updated);
+    auditService.log(currentUser, 'SETTINGS_CHANGED', { id: 'roles', name: 'Role permissions' }, { rolePermissions: localRoles });
     onSettingsUpdate(updated);
   };
 
@@ -91,14 +96,34 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
     });
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userFormData.username) return;
-    settingsService.saveUser(editingUserId ? { ...userFormData, id: editingUserId } : userFormData);
-    onUsersUpdate(settingsService.getUsers());
-    setIsUserFormOpen(false);
-    setEditingUserId(null);
-    setUserFormData({ username: '', email: '', password: '', role: 'L1' });
+    if (!userFormData.username.trim()) return;
+    setUserError('');
+    try {
+      if (editingUserId) {
+        await settingsService.updateUserAccount(currentUser, editingUserId, { username: userFormData.username.trim(), email: userFormData.email.trim(), role: userFormData.role });
+      } else {
+        await settingsService.provisionUser(currentUser, { username: userFormData.username, email: userFormData.email, role: userFormData.role });
+        alert(`Account "${userFormData.username}" provisioned.\n\nTemporary password: ${TEMP_PASSWORD}\nThe analyst must change it at first login.`);
+      }
+      onUsersUpdate(settingsService.getUsers());
+      setIsUserFormOpen(false);
+      setEditingUserId(null);
+      setUserFormData({ username: '', email: '', password: '', role: 'L1' });
+    } catch (err: any) {
+      setUserError(err.message || 'Operation failed');
+    }
+  };
+
+  const runUserAction = async (fn: () => Promise<void>, msg?: string) => {
+    try {
+      await fn();
+      onUsersUpdate(settingsService.getUsers());
+      if (msg) alert(msg);
+    } catch (err: any) {
+      alert(err.message || 'Operation failed');
+    }
   };
 
   const startEditUser = (user: User) => {
@@ -207,9 +232,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                     <tbody className="divide-y divide-zinc-800/30">
                        {users.map(u => (
                          <tr key={u.id} className="hover:bg-zinc-800/20 transition-all group">
-                            <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.username.substring(0, 2).toUpperCase()}</div><div><p className="font-bold text-white text-sm">{u.username}</p><p className="text-[10px] text-zinc-500 font-mono">{u.email}</p></div></div></td>
+                            <td className="p-5"><div className="flex items-center gap-4"><div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.username.substring(0, 2).toUpperCase()}</div><div><p className="font-bold text-white text-sm">{u.username}</p><p className="text-[10px] text-zinc-500 font-mono">{u.email}</p><div className="flex flex-wrap gap-1 mt-1">{u.forcePasswordChange && <span className="text-[9px] px-1.5 rounded border border-amber-500/30 text-amber-400">Must change password</span>}{u.disabled && <span className="text-[9px] px-1.5 rounded border border-zinc-600 text-zinc-400">Disabled</span>}{u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <span className="text-[9px] px-1.5 rounded border border-red-500/30 text-red-400">Locked</span>}<span className="text-[9px] text-zinc-600">{u.lastLoginAt ? `Last login ${new Date(u.lastLoginAt).toLocaleString()}` : 'Never logged in'}</span></div></div></div></td>
                             <td className="p-5 text-center"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border ${u.role === 'Admin' ? 'bg-red-600/10 border-red-500/20 text-red-500' : 'bg-blue-600/10 border-blue-500/20 text-blue-500'}`}>{u.role}</span></td>
-                            <td className="p-5 text-right"><div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all"><button onClick={() => startEditUser(u)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all active:scale-90"><Edit3 className="w-4 h-4" /></button><button onClick={() => { if(confirm('Delete user?')) { settingsService.deleteUser(u.id); onUsersUpdate(settingsService.getUsers()); } }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button></div></td>
+                            <td className="p-5 text-right"><div className="flex justify-end gap-1">
+                              <button title="Edit account" onClick={() => startEditUser(u)} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-blue-400 transition-all active:scale-90"><Edit3 className="w-4 h-4" /></button>
+                              <button title={`Reset password to temporary credential (${TEMP_PASSWORD})`} onClick={() => { if (confirm(`Reset ${u.username}'s password to the temporary credential? They will be forced to change it at next login.`)) runUserAction(() => settingsService.resetPassword(currentUser, u.id), `Password reset. Temporary password: ${TEMP_PASSWORD}`); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-amber-400 transition-all active:scale-90"><RotateCcw className="w-4 h-4" /></button>
+                              {u.lockedUntil && new Date(u.lockedUntil).getTime() > Date.now() && <button title="Unlock account" onClick={() => runUserAction(() => settingsService.unlockUser(currentUser, u.id))} className="p-2 hover:bg-zinc-800 rounded-lg text-amber-400 transition-all active:scale-90"><Unlock className="w-4 h-4" /></button>}
+                              {u.id !== currentUser.id && <button title={u.disabled ? 'Enable account' : 'Disable account'} onClick={() => runUserAction(() => settingsService.updateUserAccount(currentUser, u.id, { disabled: !u.disabled }).then(() => undefined))} className={`p-2 hover:bg-zinc-800 rounded-lg transition-all active:scale-90 ${u.disabled ? 'text-emerald-400' : 'text-zinc-400 hover:text-orange-400'}`}>{u.disabled ? <CheckCircle2 className="w-4 h-4" /> : <Ban className="w-4 h-4" />}</button>}
+                              {u.id !== currentUser.id && <button title="Delete account" onClick={() => { if (confirm(`Permanently delete ${u.username}? This is recorded in the audit trail.`)) runUserAction(() => settingsService.deleteUser(currentUser, u.id)); }} className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-red-400 transition-all active:scale-90"><Trash2 className="w-4 h-4" /></button>}
+                            </div></td>
                          </tr>
                        ))}
                     </tbody>
@@ -225,8 +256,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                              <div className="space-y-4">
                                 <div className="space-y-1"><label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Username</label><div className="relative"><UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700" /><input required value={userFormData.username} onChange={e => setUserFormData(p => ({...p, username: e.target.value}))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-12 pr-4 text-sm text-white focus:border-blue-500/50 outline-none" placeholder="analyst_name" /></div></div>
                                 <div className="space-y-1"><label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Email</label><div className="relative"><Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700" /><input required type="email" value={userFormData.email} onChange={e => setUserFormData(p => ({...p, email: e.target.value}))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-12 pr-4 text-sm text-white focus:border-blue-500/50 outline-none" placeholder="email@company.com" /></div></div>
-                                <div className="space-y-1"><label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Password</label><div className="relative"><Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-700" /><input type="password" value={userFormData.password} onChange={e => setUserFormData(p => ({...p, password: e.target.value}))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-3 pl-12 pr-4 text-sm text-white focus:border-blue-500/50 outline-none" placeholder={editingUserId ? "•••••••• (Leave blank to keep)" : "••••••••"} /></div></div>
-                                <div className="space-y-1"><label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Role</label><select value={userFormData.role} onChange={e => setUserFormData(p => ({...p, role: e.target.value as UserRole}))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-blue-500/50 outline-none appearance-none"><option value="L1">Level 1 Analyst</option><option value="L2">Level 2 Analyst</option><option value="Admin">Administrator</option></select></div>
+                                {!editingUserId && <div className="flex items-start gap-3 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-xs text-amber-300"><Key className="w-4 h-4 shrink-0 mt-0.5" /><span>The account is created with the temporary password <b className="font-mono">{TEMP_PASSWORD}</b> and flagged <b>forcePasswordChange</b>. The analyst must set a new password at first login.</span></div>}
+                                <div className="space-y-1"><label className="text-[10px] font-black text-zinc-600 uppercase tracking-widest ml-1">Role</label><select value={userFormData.role} onChange={e => setUserFormData(p => ({...p, role: e.target.value as UserRole}))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm text-white focus:border-blue-500/50 outline-none appearance-none"><option value="L1">Analyst — Tier 1</option><option value="L2">Analyst — Tier 2</option><option value="Admin">Administrator</option></select></div>
+                                {userError && <p className="text-xs text-red-400">{userError}</p>}
                              </div>
                           </div>
                           <div className="p-8 border-t border-zinc-800 flex justify-end bg-zinc-950/30 gap-3"><button type="button" onClick={() => setIsUserFormOpen(false)} className="px-6 py-3 text-zinc-500 hover:text-white font-black uppercase text-[10px] tracking-widest">Cancel</button><button type="submit" className="flex items-center gap-3 px-10 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl text-sm font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all"><Save className="w-4 h-4" /> Save Analyst</button></div>
@@ -274,6 +306,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ settings, users, onSettings
                             { id: 'canCreateGuideline', label: t('perm_sop_c') }, { id: 'canEditGuideline', label: t('perm_sop_u') }, { id: 'canDeleteGuideline', label: t('perm_sop_d') },
                             { id: 'canApproveRequests', label: t('perm_req_a') }, { id: 'canManageTasks', label: t('perm_tasks_m') }, { id: 'canManageUsers', label: t('perm_users_m') },
                             { id: 'canImportExport', label: t('perm_import_export') }, { id: 'canDeleteNotes', label: t('perm_delete_notes') },
+                            { id: 'canManageSchedules', label: 'Configure duty schedules' }, { id: 'canLogShiftEvents', label: 'Log shift events / sync drafts' },
+                            { id: 'canFinalizeReports', label: 'Finalize shift reports' }, { id: 'canDeleteReports', label: 'Delete shift reports' },
+                            { id: 'canExportReports', label: 'Export reports' }, { id: 'canViewAuditLog', label: 'View audit trail' },
                           ].map(perm => (
                             <tr key={perm.id} className="hover:bg-zinc-800/20 transition-colors"><td className="p-5 text-sm font-bold text-zinc-300 uppercase tracking-tighter">{perm.label}</td>{(['Admin', 'L2', 'L1'] as UserRole[]).map(role => (<td key={role} className="p-5 text-center"><button onClick={() => togglePermission(role, perm.id as any)} className={`p-2 rounded-lg transition-all ${localRoles[role][perm.id as keyof RolePermissions] ? 'text-blue-500 bg-blue-500/10' : 'text-zinc-800 hover:text-zinc-600'}`}>{localRoles[role][perm.id as keyof RolePermissions] ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}</button></td>))}</tr>
                           ))}</tbody>

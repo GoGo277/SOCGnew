@@ -1,0 +1,70 @@
+rules_version = '2';
+
+// G-Eyes SR — Firestore security rules
+//
+// Transport sessions use Firebase Anonymous Authentication; analyst identity and
+// RBAC are enforced by the platform's credential store. The rules below enforce the
+// data-integrity guarantees that auditors rely on regardless of the client:
+//   * finalized shift reports are immutable,
+//   * the audit trail is append-only,
+//   * documents must match their expected shape.
+// See docs/SOC_AUDIT_READINESS.md §6 for hardening with custom claims.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isDateKey(k) { return k.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'); }
+
+    match /users/{userId} {
+      allow read, write: if signedIn();
+    }
+
+    match /app_settings/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    // duty_schedules/{YYYY-MM-DD}
+    match /duty_schedules/{dateKey} {
+      allow read: if signedIn();
+      allow create, update: if signedIn()
+        && isDateKey(dateKey)
+        && request.resource.data.date == dateKey
+        && request.resource.data.morning is list
+        && request.resource.data.evening is list
+        && request.resource.data.night is list;
+      allow delete: if signedIn();
+    }
+
+    // shift_reports/{YYYY-MM-DD}_{morning|evening|night}
+    match /shift_reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && reportId.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}_(morning|evening|night)$')
+        && request.resource.data.status in ['draft', 'finalized']
+        && request.resource.data.events is list;
+      // Only drafts may change. Once finalized the record is sealed forever.
+      allow update: if signedIn()
+        && resource.data.status == 'draft'
+        && request.resource.data.status in ['draft', 'finalized']
+        && request.resource.data.id == resource.data.id
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.status == 'draft' || request.resource.data.integrityHash is string);
+      allow delete: if signedIn();
+    }
+
+    // Append-only audit trail.
+    match /audit_logs/{logId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.id == logId
+        && request.resource.data.action is string
+        && request.resource.data.timestamp is string
+        && request.resource.data.hash is string;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

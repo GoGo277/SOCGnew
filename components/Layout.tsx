@@ -5,8 +5,9 @@ import {
   Settings, ClipboardList, BookOpen, ChevronLeft, 
   ChevronRight, Bell, User as UserIcon, ShieldAlert,
   MessageSquare, Megaphone, UserCircle, CheckSquare,
-  ShieldCheck, RefreshCw, Zap
+  ShieldCheck, RefreshCw, Zap, CalendarDays, FileText, BarChart3, ScrollText, KeyRound
 } from 'lucide-react';
+import { backendLabel } from '../lib/firebase';
 import { User, AppSettings } from '../types';
 import { getTranslator } from '../translations';
 
@@ -21,6 +22,7 @@ interface LayoutProps {
   onToggleNotifCenter: () => void;
   isNotifCenterOpen: boolean;
   navCounts?: Record<string, number>;
+  onChangePassword?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
@@ -33,7 +35,8 @@ const Layout: React.FC<LayoutProps> = ({
   totalAlerts,
   onToggleNotifCenter,
   isNotifCenterOpen,
-  navCounts = {}
+  navCounts = {},
+  onChangePassword
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
@@ -51,6 +54,9 @@ const Layout: React.FC<LayoutProps> = ({
 
   const allNavItems = useMemo(() => ([
     { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard, color: 'text-blue-400', visible: permissions.visiblePages.dashboard },
+    { id: 'duty', label: t('duty'), icon: CalendarDays, color: 'text-cyan-400', visible: permissions.visiblePages.duty !== false },
+    { id: 'shift-reports', label: t('shift-reports'), icon: FileText, color: 'text-red-400', visible: permissions.visiblePages.shiftReports !== false },
+    { id: 'executive', label: t('executive'), icon: BarChart3, color: 'text-indigo-400', visible: permissions.visiblePages.executive !== false },
     { id: 'assets', label: t('assets'), icon: Database, color: 'text-blue-400', visible: permissions.visiblePages.assets },
     { id: 'incidents', label: t('incidents'), icon: Activity, color: 'text-red-400', visible: permissions.visiblePages.incidents },
     { id: 'tasks', label: t('tasks'), icon: CheckSquare, color: 'text-cyan-400', visible: permissions.visiblePages.tasks },
@@ -59,6 +65,7 @@ const Layout: React.FC<LayoutProps> = ({
     { id: 'guidelines', label: t('guidelines'), icon: BookOpen, color: 'text-emerald-400', visible: true },
     { id: 'admin-requests', label: t('admin_requests'), icon: ShieldCheck, color: 'text-amber-400', visible: currentUser.role === 'Admin' },
     { id: 'requests', label: t('requests'), icon: ClipboardList, color: 'text-amber-400', visible: currentUser.role !== 'Admin' },
+    { id: 'audit', label: t('audit'), icon: ScrollText, color: 'text-amber-400', visible: currentUser.role === 'Admin' || !!permissions.canViewAuditLog },
   ]), [t, permissions, currentUser.role]);
 
   const sortedNavItems = useMemo(() => {
@@ -72,6 +79,10 @@ const Layout: React.FC<LayoutProps> = ({
   const getPageTitle = () => {
     switch (activeTab) {
       case 'dashboard': return t('soc_hub');
+      case 'duty': return t('duty');
+      case 'shift-reports': return t('shift-reports');
+      case 'executive': return t('executive');
+      case 'audit': return t('audit');
       case 'assets': return t('assets');
       case 'incidents': return t('incidents');
       case 'tasks': return t('mission_control');
@@ -118,7 +129,7 @@ const Layout: React.FC<LayoutProps> = ({
             <h2 className="text-lg font-black tracking-tight text-white uppercase flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />{getPageTitle()}</h2>
             <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-zinc-950 border border-zinc-800 rounded-full">
                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-               <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Real-time Sync Active</span>
+               <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">{backendLabel}</span>
             </div>
           </div>
 
@@ -132,7 +143,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] overflow-hidden ${currentUser.role === 'Admin' ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}>{currentUser.profilePic ? (<img src={currentUser.profilePic} alt="" className="w-full h-full object-cover" />) : (<UserIcon className="w-4 h-4" />)}</div>
               </button>
 
-              {isAccountMenuOpen && (<><div className="fixed inset-0 z-40" onClick={() => setIsAccountMenuOpen(false)} /><div className="absolute right-0 mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200"><div className="px-3 py-3 border-b border-zinc-800/50 mb-1"><p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Session Protocol</p><p className="text-xs font-bold text-zinc-300 truncate">@{currentUser.username.toLowerCase()}</p></div><button onClick={() => { onTabChange('profile'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><UserCircle className="w-4 h-4" /><span className="text-xs font-bold">{t('profile')}</span></button>{currentUser.role === 'Admin' && (<button onClick={() => { onTabChange('settings'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><Settings className="w-4 h-4" /><span className="text-xs font-bold">{t('settings')}</span></button>)}<button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"><LogOut className="w-4 h-4" /><span className="text-xs font-bold">{t('logout')}</span></button></div></>)}
+              {isAccountMenuOpen && (<><div className="fixed inset-0 z-40" onClick={() => setIsAccountMenuOpen(false)} /><div className="absolute right-0 mt-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200"><div className="px-3 py-3 border-b border-zinc-800/50 mb-1"><p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Session Protocol</p><p className="text-xs font-bold text-zinc-300 truncate">@{currentUser.username.toLowerCase()}</p></div><button onClick={() => { onTabChange('profile'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><UserCircle className="w-4 h-4" /><span className="text-xs font-bold">{t('profile')}</span></button>{currentUser.role === 'Admin' && (<button onClick={() => { onTabChange('settings'); setIsAccountMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-blue-600 text-white' : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'}`}><Settings className="w-4 h-4" /><span className="text-xs font-bold">{t('settings')}</span></button>)}{onChangePassword && (<button onClick={() => { onChangePassword(); setIsAccountMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-zinc-400 hover:bg-zinc-800 hover:text-white"><KeyRound className="w-4 h-4" /><span className="text-xs font-bold">Change password</span></button>)}<button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all"><LogOut className="w-4 h-4" /><span className="text-xs font-bold">{t('logout')}</span></button></div></>)}
             </div>
           </div>
         </header>

@@ -1,5 +1,5 @@
 {
-  "name": "SOC Asset Guardian",
-  "description": "A high-performance security asset management platform designed for SOC analysts, featuring real-time tracking, CRUD operations, and advanced JSON data mobility.",
+  "name": "G-Eyes SR",
+  "description": "SOC Operations & Intelligence Platform — 3-shift duty roster, shift incident logging with immutable finalization, executive threat analytics, audit trail and multi-format (PDF/HTML/MD/JSON/ZIP) report export.",
   "requestFramePermissions": []
 }

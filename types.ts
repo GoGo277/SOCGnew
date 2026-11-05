@@ -70,6 +70,17 @@ export interface User {
   profilePic?: string;
   bio?: string;
   lastSeen?: string;
+  /** PBKDF2-SHA256 credential hash (never stored in the session) */
+  passwordHash?: string;
+  passwordSalt?: string;
+  /** When true the user is intercepted by the ForceChangePassword modal on login */
+  forcePasswordChange?: boolean;
+  passwordChangedAt?: string;
+  failedLoginAttempts?: number;
+  lockedUntil?: string;
+  disabled?: boolean;
+  lastLoginAt?: string;
+  createdBy?: string;
 }
 
 export interface Guideline {
@@ -136,7 +147,17 @@ export interface RolePermissions {
     messaging: boolean;
     announcements: boolean;
     tasks: boolean;
+    duty?: boolean;
+    shiftReports?: boolean;
+    executive?: boolean;
   };
+  /** G-Eyes SR operational permissions (undefined => role default) */
+  canManageSchedules?: boolean;
+  canLogShiftEvents?: boolean;
+  canFinalizeReports?: boolean;
+  canDeleteReports?: boolean;
+  canExportReports?: boolean;
+  canViewAuditLog?: boolean;
 }
 
 export interface AppSettings {
@@ -174,4 +195,87 @@ export interface Announcement {
   authorName: string;
   severity: Severity;
   createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// G-Eyes SR — Shift operations & intelligence reporting
+// ---------------------------------------------------------------------------
+import type { ShiftId } from './lib/shifts';
+export type { ShiftId } from './lib/shifts';
+
+/** Firestore `duty_schedules/{YYYY-MM-DD}` */
+export interface DutySchedule {
+  id: string; // YYYY-MM-DD
+  date: string;
+  morning: string[]; // user ids
+  evening: string[];
+  night: string[];
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface ShiftEvent {
+  id: string;
+  timestamp: string; // ISO
+  eventName: string;
+  attackType: string;
+  sourceIp: string;
+  destinationIp: string;
+  port: string;
+  protocol: string;
+  severity: Severity;
+  investigation: string;
+  remediation: string;
+  conclusion: string;
+  loggedBy: string;
+  loggedById: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ShiftReportStatus = 'draft' | 'finalized';
+
+/** Firestore `shift_reports/{YYYY-MM-DD}_{shift}` */
+export interface ShiftReport {
+  id: string;
+  date: string;
+  shift: ShiftId;
+  title: string;
+  status: ShiftReportStatus;
+  events: ShiftEvent[];
+  summary: string;
+  handoverNotes: string;
+  contributors: string[]; // usernames that edited the draft
+  createdBy: string;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
+  updatedBy: string;
+  revision: number;
+  finalizedAt?: string;
+  finalizedBy?: string;
+  /** SHA-256 over the canonical sealed content */
+  integrityHash?: string;
+}
+
+export type ExportFormat = 'pdf' | 'html' | 'md' | 'json';
+
+export interface CustomSection {
+  id: string;
+  position: 'header' | 'body' | 'footer';
+  heading: string;
+  content: string;
+}
+
+export interface ReportExportOptions {
+  title: string;
+  subtitle: string;
+  classification: string;
+  preparedBy: string;
+  organization: string;
+  includePageNumbers: boolean;
+  includeEventDetails: boolean;
+  includeAnalytics: boolean;
+  includeIntegrity: boolean;
+  customSections: CustomSection[];
 }

@@ -31,6 +31,15 @@ import AnnouncementsPage from './components/AnnouncementsPage';
 import TasksPage from './components/TasksPage';
 import Login from './components/Login';
 import Toast from './components/Toast';
+import ForceChangePassword from './components/ForceChangePassword';
+import DutyNow from './components/DutyNow';
+import MonthlySchedule from './components/MonthlySchedule';
+import ShiftReportsPage from './components/ShiftReportsPage';
+import ExecutiveReview from './components/ExecutiveReview';
+import AuditLogPage from './components/AuditLogPage';
+import { dutyService } from './services/dutyService';
+import { shiftReportService } from './services/shiftReportService';
+import { DutySchedule, ShiftReport } from './types';
 import { Plus, Tag as TagIcon, Search, SlidersHorizontal, Activity, ArrowRight, Download, Upload, Trash2, Edit3 } from 'lucide-react';
 import { ASSET_TYPE_ICONS, ASSET_TYPES, ASSET_TYPE_COLORS } from './constants';
 import { getTranslator } from './translations';
@@ -73,6 +82,23 @@ const App: React.FC = () => {
   });
 
   const [toast, setToast] = useState<{ message: string, isOpen: boolean }>({ message: '', isOpen: false });
+  const [dutySchedules, setDutySchedules] = useState<Record<string, DutySchedule>>({});
+  const [shiftReports, setShiftReports] = useState<ShiftReport[]>([]);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+
+  // Firestore real-time sync of the user registry & global settings.
+  useEffect(() => settingsService.startCloudSync(), []);
+
+  // Real-time listeners for G-Eyes SR operational collections.
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubs = [
+      dutyService.subscribe(setDutySchedules),
+      shiftReportService.subscribe(setShiftReports),
+      auditService.subscribe(setAuditLogs),
+    ];
+    return () => unsubs.forEach(u => u());
+  }, [currentUser?.id]);
 
   const t = useMemo(() => getTranslator(settings.language), [settings.language]);
   const assetInputRef = useRef<HTMLInputElement>(null);
@@ -113,15 +139,13 @@ const App: React.FC = () => {
       setCurrentUser(session);
       
       // Load async data from Supabase
-      const [supabaseAssets, supabaseIncidents, supabaseAuditLogs] = await Promise.all([
+      const [supabaseAssets, supabaseIncidents] = await Promise.all([
         supabaseService.getAssets(),
         supabaseService.getIncidents(),
-        supabaseService.getAuditLogs()
       ]);
       
       setAssets(supabaseAssets.length > 0 ? supabaseAssets : [...assetService.getAssets()]);
       setIncidents(supabaseIncidents.length > 0 ? supabaseIncidents : [...incidentService.getIncidents()]);
-      setAuditLogs(supabaseAuditLogs.length > 0 ? supabaseAuditLogs : [...auditService.getLogs()]);
       
       // Load sync data from local storage
       setTasks([...taskService.getTasks()]);
@@ -221,7 +245,23 @@ const App: React.FC = () => {
     return <Login onLogin={handleLogin} settings={settings} />;
   }
 
+  // Forced password reset protocol: block all access until the temporary credential is rotated.
+  if (currentUser.forcePasswordChange) {
+    return (
+      <div className="min-h-screen bg-[#09090b]">
+        <ForceChangePassword
+          user={currentUser}
+          forced
+          onComplete={() => { setCurrentUser(settingsService.getActiveSession()); showToast('Password updated — access granted'); }}
+          onCancel={handleLogout}
+        />
+      </div>
+    );
+  }
+
   const permissions = settings.rolePermissions[currentUser.role];
+  const isAdmin = currentUser.role === 'Admin';
+  const canManageSchedules = isAdmin || !!permissions.canManageSchedules;
 
   const handleSaveAsset = async (assetData: any) => {
     if (currentUser.role !== 'Admin' && (!permissions.canCreateAsset || !permissions.canEditAsset)) {
@@ -372,7 +412,16 @@ const App: React.FC = () => {
 
   const renderActiveTab = () => {
     switch(activeTab) {
-      case 'dashboard': return <Dashboard assets={assets} incidents={incidents} tasks={tasks} requests={requests} announcements={announcements} guidelines={guidelines} auditLogs={auditLogs} language={settings.language} />;
+      case 'dashboard': return (
+        <div className="space-y-8">
+          <DutyNow schedules={dutySchedules} users={users} currentUser={currentUser} />
+          <Dashboard assets={assets} incidents={incidents} tasks={tasks} requests={requests} announcements={announcements} guidelines={guidelines} auditLogs={auditLogs} language={settings.language} />
+        </div>
+      );
+      case 'duty': return <MonthlySchedule schedules={dutySchedules} users={users} currentUser={currentUser} canManage={canManageSchedules} onToast={showToast} />;
+      case 'shift-reports': return <ShiftReportsPage reports={shiftReports} currentUser={currentUser} permissions={isAdmin ? { ...permissions, canDeleteReports: true } : permissions} onToast={showToast} />;
+      case 'executive': return <ExecutiveReview reports={shiftReports} currentUser={currentUser} />;
+      case 'audit': return (isAdmin || permissions.canViewAuditLog) ? <AuditLogPage logs={auditLogs} currentUser={currentUser} onToast={showToast} /> : null;
       case 'assets': return (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -500,13 +549,13 @@ const App: React.FC = () => {
       case 'admin-requests': return currentUser.role === 'Admin' && <AdminRequestsPage currentUser={currentUser} requests={requests} onViewDetails={setSelectedRequest} onRefresh={loadData} language={settings.language} />;
       case 'requests': return <MyRequestsPage currentUser={currentUser} requests={requests} onViewDetails={setSelectedRequest} onRefresh={loadData} language={settings.language} />;
       case 'profile': return <ProfilePage user={currentUser} onUpdate={() => { loadData(); showToast("Profile Metadata Updated"); }} language={settings.language} />;
-      case 'settings': return currentUser.role === 'Admin' && <SettingsPage settings={settings} users={users} onSettingsUpdate={(s) => { setSettings(s); loadData(); showToast("Core Parameters Updated"); }} onUsersUpdate={(u) => { setUsers(u); loadData(); showToast("Analyst Registry Updated"); }} />;
+      case 'settings': return currentUser.role === 'Admin' && <SettingsPage currentUser={currentUser} settings={settings} users={users} onSettingsUpdate={(s) => { setSettings(s); loadData(); showToast("Core Parameters Updated"); }} onUsersUpdate={(u) => { setUsers(u); loadData(); showToast("Analyst Registry Updated"); }} />;
       default: return null;
     }
   };
 
   return (
-    <Layout activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
+    <Layout onChangePassword={() => setIsChangePasswordOpen(true)} activeTab={activeTab} onTabChange={handleTabChange} currentUser={currentUser} settings={settings} onLogout={handleLogout} totalAlerts={totalAlerts} onToggleNotifCenter={() => setIsNotifCenterOpen(!isNotifCenterOpen)} isNotifCenterOpen={isNotifCenterOpen} navCounts={navCounts}>
       <NotificationCenter isOpen={isNotifCenterOpen} onClose={() => setIsNotifCenterOpen(false)} currentUser={currentUser} notifications={notifications} requests={requests} onUpdate={loadData} onOpenRequest={setSelectedRequest} language={settings.language} />
       {renderActiveTab()}
       {selectedRequest && <RequestDetailModal request={selectedRequest} isOpen={true} onClose={() => setSelectedRequest(null)} canApprove={permissions.canApproveRequests} onResolve={(st) => { requestService.resolveRequest(selectedRequest.id, currentUser, st); auditService.log(currentUser, 'REQUEST_RESOLVED', { id: selectedRequest.id, name: selectedRequest.action }, { status: st }); loadData(); setSelectedRequest(null); showToast(`Request ${st}`); }} language={settings.language} />}
@@ -517,6 +566,9 @@ const App: React.FC = () => {
       <DeleteConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={confirmDelete} assetName={deleteContext === 'asset' ? assetToDelete?.name || '' : deleteContext === 'incident' ? incidentToDelete?.eventName || '' : "security note"} language={settings.language} />
       {isNoteFormOpen && noteTarget && (
         <NoteModal targetName={noteTarget.type === 'asset' ? noteTarget.data.name : noteTarget.data.eventName} targetTypeLabel={noteTarget.type === 'asset' ? t('assets') : t('incidents')} isOpen={isNoteFormOpen} currentUser={currentUser} onClose={() => { setIsNoteFormOpen(false); setNoteTarget(null); setEditingNote(null); }} onSave={handleSaveNote} language={settings.language} initialNote={editingNote} />
+      )}
+      {isChangePasswordOpen && (
+        <ForceChangePassword user={currentUser} forced={false} onComplete={() => { setIsChangePasswordOpen(false); showToast('Password updated'); }} onCancel={() => setIsChangePasswordOpen(false)} />
       )}
       <Toast message={toast.message} isOpen={toast.isOpen} onClose={() => setToast(p => ({ ...p, isOpen: false }))} />
     </Layout>

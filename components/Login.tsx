@@ -16,20 +16,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
-
-    setTimeout(() => {
-      const user = settingsService.authenticate(username, password);
-      if (user) {
-        onLogin(user);
-      } else {
-        setError('Invalid security credentials provided');
-      }
+    try {
+      const { user, error: authError } = await settingsService.authenticate(username, password);
+      if (user) onLogin(user);
+      else setError(authError || 'Invalid security credentials provided');
+    } catch (err) {
+      setError('Authentication service unavailable');
+    } finally {
       setLoading(false);
-    }, 800);
+    }
   };
 
   return (
@@ -63,6 +62,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
                 <input
                   required
                   type="text"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder={t('analyst_name')}
@@ -78,6 +78,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
                 <input
                   required
                   type="password"
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
@@ -111,6 +112,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, settings }) => {
 
           <div className="mt-8 pt-6 border-t border-zinc-800 text-center">
             <p className="text-[10px] text-zinc-600 uppercase tracking-widest">{t('auth_access_only')}</p>
+            <p className="text-[10px] text-zinc-700 mt-2">All access is logged and audited. Unauthorized use is prohibited.</p>
           </div>
         </div>
       </div>
