@@ -1,90 +1,100 @@
 # G-Eyes SR — SOC Reporting & Audit Readiness
 
-This document explains how G-Eyes SR supports SOC reporting and audits: which
-controls exist, where an auditor finds evidence, and which gaps an operator must
-close before production use.
+This document describes how G-Eyes SR supports SOC reporting and external audit. It lists the controls in place, where an auditor finds evidence, how the controls are tested, and the residual risks an operator must accept or close.
 
-## 1. Scope
+## 1. Deployment modes
 
-| In scope | Out of scope |
-|---|---|
-| Analyst identity, roles and credentials | SIEM / log ingestion (events are logged by analysts) |
-| 24/7 duty rostering and shift coverage | Automated alerting / paging |
-| Shift incident logging and report finalization | Ticketing / case-management integrations |
-| Report generation and export | Long-term archival storage (export ZIPs to your archive) |
-| Audit trail of platform activity | |
-
-## 2. Roles (RBAC)
-
-| Role | Label in UI | Default capabilities |
+| Mode | Use | Enforcement point |
 |---|---|---|
-| `Admin` | Administrator | Provision users, change roles, reset passwords, unlock/disable/delete accounts, configure monthly schedules, delete reports, view and export the audit trail, change role permissions |
-| `L2` | Analyst — Tier 2 | Log shift events, sync drafts, finalize reports, view rosters, export reports |
-| `L1` | Analyst — Tier 1 | Same as Tier 2 for shift operations; fewer asset/SOP rights |
+| **Cloud** (Firebase) | Production | Firebase Authentication with TOTP MFA, custom-claim roles, Firestore security rules, Cloud Functions |
+| **Local** | Evaluation and demos | The browser only. Data stays in one browser profile. **Not for production evidence.** |
 
-Admins can adjust permissions per role in **Settings → User & Role Management**.
-Every permission change writes a `SETTINGS_CHANGED` audit entry that contains the full permission matrix.
+The rest of this document describes **cloud mode** unless stated otherwise.
+
+## 2. Roles
+
+| Role | UI label | Default capabilities |
+|---|---|---|
+| `Admin` | Administrator | Identity administration, roles, MFA resets, rosters and swap approval, SOC policy (SLA, MFA), report deletion, report schedules, audit trail |
+| `L2` | Analyst — Tier 2 | Log events, sync drafts, finalize, acknowledge handovers, request swaps, export, templates |
+| `L1` | Analyst — Tier 1 | As Tier 2 for shift operations; fewer asset and SOP rights |
+
+Roles are **custom claims** that only Cloud Functions can set. A client cannot change its own role, because the rules block edits to `users.role`.
 
 ## 3. Control mapping
 
-| Control objective | Implementation | Evidence | SOC 2 | ISO 27001:2022 |
-|---|---|---|---|---|
-| Unique user identification | One account per analyst; usernames are unique | `users` collection, `USER_CREATED` entries | CC6.1 | A.5.16 |
-| Secure initial credential | New and reset accounts get the temporary password `12345a` with `forcePasswordChange = true`. The **ForceChangePassword** modal blocks all access until it is rotated | `USER_CREATED`, `PASSWORD_RESET`, `FORCED_PASSWORD_CHANGE` | CC6.1, CC6.2 | A.5.17 |
-| Password strength | At least 10 characters, with upper, lower, digit and symbol; must not contain the username; must differ from the current and temporary password | `lib/crypto.ts` `checkPasswordPolicy` | CC6.1 | A.5.17 |
-| Credential storage | PBKDF2-SHA256, 120,000 iterations, 16-byte random salt per user. Legacy plaintext is migrated on the next successful login | `users.passwordHash`/`passwordSalt` | CC6.1 | A.8.5 |
-| Brute-force protection | 5 failed attempts lock the account for 15 minutes; failures are logged even for unknown usernames | `LOGIN_FAILED`, `ACCOUNT_LOCKED` | CC6.1 | A.8.5 |
-| Session management | Sessions expire after 12 h. Each session is checked against the synced registry, so disabling or deleting an account ends its access | `SESSION_EXPIRED` | CC6.1 | A.8.5 |
-| Least privilege / access changes | Role-based permissions; role changes logged with before and after values; the last admin cannot be demoted or deleted | `ROLE_CHANGED`, `USER_UPDATED`, `USER_DELETED` | CC6.2, CC6.3 | A.5.15, A.5.18 |
-| 24/7 coverage | 3-shift roster, coverage-gap counter, live **Duty Now** panel | `duty_schedules`, `DUTY_SCHEDULE_UPDATED` (stores the before and after roster) | CC7.3 | A.5.24 |
-| Incident recording | Structured event fields, severity taxonomy, validation of IP addresses and ports, investigation, remediation and conclusion fields | `shift_reports.events`, `SHIFT_EVENT_*` | CC7.3, CC7.4 | A.5.25, A.5.26 |
-| Record integrity / non-repudiation | Finalization seals the report with a SHA-256 hash over its canonical content. Firestore rules reject any update to a finalized report. **Verify integrity** recomputes the hash | `integrityHash`, `SHIFT_REPORT_FINALIZED`, `INTEGRITY_VERIFIED` | CC7.4 | A.5.28 |
-| Shift handover | Summary and handover notes for each report; the finalize step warns when they are missing | `shift_reports.summary` / `handoverNotes` | CC7.3 | A.5.24 |
-| Audit logging | Every auth, admin, roster, report and export action is logged with user, role, timestamp, target, metadata, user agent and a per-entry SHA-256 hash | `audit_logs` | CC7.2 | A.8.15 |
-| Log protection | `audit_logs` is append-only (`update, delete: if false`). **Verify integrity** in the Audit Trail recomputes every hash | `firestore.rules` | CC7.2 | A.8.15 |
-| Reporting & distribution | Exports in PDF, HTML, MD and JSON carry a classification or TLP marking. Batch ZIPs include `MANIFEST.json` with SHA-256 hashes of each file and the seal of each report | `REPORT_EXPORTED`, `REPORT_BATCH_EXPORTED` | CC2.2 | A.5.12, A.5.13 |
-| Management review | Executive Review shows the criticality index, top vectors, hostile IPs and volume by day and shift; it exports an executive brief | `REPORT_EXPORTED` (`executive-brief`) | CC4.1 | A.5.35 |
+| Control objective | Implementation | Evidence | Verified by | SOC 2 | ISO 27001:2022 |
+|---|---|---|---|---|---|
+| Unique identities | One Firebase Auth account per analyst. Usernames are unique (`login_index`). | `users`, `USER_CREATED` | functions tests | CC6.1 | A.5.16 |
+| Secure initial credential | Temporary password `12345a` plus `forcePasswordChange`. All access is blocked until the password is rotated. | `USER_CREATED`, `PASSWORD_RESET`, `FORCED_PASSWORD_CHANGE` | functions + e2e | CC6.1 | A.5.17 |
+| Password strength | Minimum 10 characters with upper, lower, digit and symbol. Must not contain the username, the temporary password, or the current password. Enforced server-side. | `changePassword` | unit + functions | CC6.1 | A.5.17 |
+| Multi-factor authentication | TOTP (RFC 6238). **Mandatory for administrators** (policy setting). Admin functions and admin rule paths require `sign_in_second_factor`. | `MFA_ENROLLED`, `MFA_RESET`, rules | rules + functions + e2e | CC6.1 | A.8.5 |
+| Brute-force resistance | Firebase Auth throttling in cloud mode; 5-attempt lockout in local mode. Failed sign-ins are recorded server-side with source IP. | `LOGIN_FAILED`, `ACCOUNT_LOCKED` | functions + e2e | CC6.1 | A.8.5 |
+| Session control | 12 h platform session. Role changes and disabling an account revoke refresh tokens. | `ROLE_CHANGED`, `USER_UPDATED` | functions | CC6.1 | A.8.5 |
+| Least privilege and change of access | Claims-based roles. Before/after values are logged on role changes. The last active admin cannot be demoted, disabled or deleted. Admins cannot demote themselves. | `ROLE_CHANGED` | functions | CC6.2, CC6.3 | A.5.15, A.5.18 |
+| Segregation of duties | An admin cannot approve a shift swap they are part of while another admin exists. Report sealing is performed by the server, not the author. | `SHIFT_SWAP_APPROVED.selfDecision` | unit + rules | CC5.1 | A.5.3 |
+| 24/7 coverage | Three-shift roster, coverage-gap counter, Duty Now panel, approved swaps. | `duty_schedules`, `DUTY_SCHEDULE_UPDATED` (before/after), `SHIFT_SWAP_*` | rules + e2e | CC7.3 | A.5.24 |
+| Incident recording | Structured events with validated IPs and ports, severity taxonomy, lifecycle times, investigation, remediation and conclusion. | `shift_reports.events`, `SHIFT_EVENT_*`, `EVENT_STATUS_CHANGED` | unit + e2e | CC7.3, CC7.4 | A.5.25, A.5.26 |
+| Incident response timeliness | SLA targets per severity. Live states (on track, at risk, breached, met). MTTD, MTTC and MTTR. | Executive Review, brief exports | unit + e2e | CC7.4 | A.5.26 |
+| Escalation | One-click escalation creates a tracked incident linked to assets and to the source event. | `EVENT_ESCALATED`, incident tags `report:` / `event:` | e2e | CC7.4 | A.5.26 |
+| Continuity between shifts | Open items carry over automatically. The incoming shift's sign-off is recorded together with the sealed report's hash and is immutable. | `SHIFT_ITEMS_CARRIED_OVER`, `handover_acks`, `HANDOVER_ACKNOWLEDGED` | unit + rules + e2e | CC7.3 | A.5.24 |
+| Record integrity / non-repudiation | Finalized reports are sealed **server-side** (server time, verified identity, SHA-256). Rules reject any client attempt to finalize or edit a sealed report. | `integrityHash`, `SHIFT_REPORT_FINALIZED (sealedBy: server)`, `INTEGRITY_VERIFIED` | rules + functions + e2e | CC7.4 | A.5.28 |
+| Audit logging | Every security-relevant action is logged with user, role, timestamp, target, metadata, user agent and a SHA-256 hash. Clients can only write entries under their own identity. | `audit_logs` | rules + e2e | CC7.2 | A.8.15 |
+| Log protection | `audit_logs` is append-only. A server sink re-verifies each hash, raises `audit_integrity_alerts`, and forwards entries to Cloud Logging, which routes them to a retention-locked bucket (WORM). | `audit_integrity_alerts`, log bucket | rules + functions | CC7.2 | A.8.15 |
+| Reporting and distribution | PDF, HTML, Markdown and JSON with classification / TLP markings. ZIP manifest of SHA-256 hashes. Scheduled briefs are archived with a hash and an immutable archive record. | `REPORT_EXPORTED`, `REPORT_BATCH_EXPORTED`, `report_archive`, `SCHEDULED_REPORT_GENERATED` | functions + e2e | CC2.2 | A.5.12, A.5.13 |
+| Management review | Executive Review and scheduled executive briefs: SLA compliance, handover compliance, criticality index, threat landscape. | `report_archive` | functions + e2e | CC4.1 | A.5.35 |
+| Change management (code) | CI on every push: type-check, unit tests, i18n coverage, emulator rules and functions tests, end-to-end tests. | GitHub Actions history | — | CC8.1 | A.8.32 |
 
-## 4. Audit trail event catalogue
+## 4. Audit event catalogue
 
 | Category | Actions |
 |---|---|
-| Authentication | `LOGIN`, `LOGOUT`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `SESSION_EXPIRED` |
-| Credentials | `PASSWORD_CHANGED`, `FORCED_PASSWORD_CHANGE`, `PASSWORD_RESET` |
-| Administration | `USER_CREATED`, `USER_UPDATED`, `USER_DELETED`, `ROLE_CHANGED`, `SETTINGS_CHANGED` |
-| Roster | `DUTY_SCHEDULE_UPDATED` |
-| Shift reporting | `SHIFT_REPORT_CREATED`, `SHIFT_EVENT_ADDED`, `SHIFT_EVENT_UPDATED`, `SHIFT_EVENT_REMOVED`, `SHIFT_DRAFT_SYNCED`, `SHIFT_REPORT_FINALIZED`, `SHIFT_REPORT_DELETED`, `INTEGRITY_VERIFIED` |
-| Distribution | `REPORT_EXPORTED`, `REPORT_BATCH_EXPORTED`, `AUDIT_LOG_EXPORTED` |
-| Legacy modules | `CREATE_/EDIT_/DELETE_ASSET`, `CREATE_/EDIT_/DELETE_INCIDENT`, `VIEW_*`, `REQUEST_*`, `TASK_*`, `SOP_COMMIT`, `ANNOUNCEMENT_POST` |
+| Authentication | `LOGIN`, `LOGOUT`, `LOGIN_FAILED`, `ACCOUNT_LOCKED`, `SESSION_EXPIRED`, `MFA_CHALLENGE_FAILED` |
+| Credentials & MFA | `PASSWORD_CHANGED`, `FORCED_PASSWORD_CHANGE`, `PASSWORD_RESET`, `MFA_ENROLLED`, `MFA_RESET` |
+| Administration | `USER_CREATED`, `USER_UPDATED`, `USER_DELETED`, `ROLE_CHANGED`, `SETTINGS_CHANGED` (includes SLA / MFA policy before & after) |
+| Roster | `DUTY_SCHEDULE_UPDATED`, `SHIFT_SWAP_REQUESTED`, `SHIFT_SWAP_PEER_ACCEPTED`, `SHIFT_SWAP_PEER_DECLINED`, `SHIFT_SWAP_APPROVED`, `SHIFT_SWAP_REJECTED`, `SHIFT_SWAP_CANCELLED` |
+| Shift reporting | `SHIFT_REPORT_CREATED`, `SHIFT_EVENT_ADDED`, `SHIFT_EVENT_UPDATED`, `SHIFT_EVENT_REMOVED`, `EVENT_STATUS_CHANGED`, `EVENT_ESCALATED`, `SHIFT_ITEMS_CARRIED_OVER`, `SHIFT_DRAFT_SYNCED`, `SHIFT_REPORT_FINALIZED`, `SHIFT_REPORT_DELETED`, `HANDOVER_ACKNOWLEDGED`, `INTEGRITY_VERIFIED` |
+| Reporting | `REPORT_EXPORTED`, `REPORT_BATCH_EXPORTED`, `REPORT_TEMPLATE_SAVED`, `REPORT_TEMPLATE_DELETED`, `REPORT_SCHEDULE_SAVED`, `REPORT_SCHEDULE_DELETED`, `SCHEDULED_REPORT_GENERATED`, `AUDIT_LOG_EXPORTED` |
+| Legacy modules | asset, incident, request, task, SOP and announcement actions |
+
+Entries written by Cloud Functions carry `metadata.source = "server"`.
 
 ## 5. Operating procedures
 
-**Shift lifecycle**
-1. At shift start, open **Shift Reports → Open current shift**. The platform creates or reopens the draft `YYYY-MM-DD_<shift>`.
-2. Log every triaged event. Drafts auto-sync 2.5 s after the last edit, and any analyst on the shift can contribute in real time.
-3. Before handover, write the shift summary and handover notes.
-4. Select **Finalize** to seal the report. After that it cannot be edited, only verified, exported or (by an admin) deleted with an audit entry.
+### Shift lifecycle
 
-**Periodic evidence pack (monthly or quarterly)**
-1. In **Shift Reports**, filter by the period and select **Finalized**, then select all and choose **Export ZIP** in PDF and JSON.
-2. In **Audit Trail**, filter by the same period, select **Verify integrity**, then export CSV and JSON.
-3. In **Executive Review**, choose a custom range and export the brief.
-4. Store the three artifacts in your evidence repository. The ZIP `MANIFEST.json` hashes let reviewers confirm the files were not modified.
+1. At shift start, review the **handover banner** and acknowledge the previous report. Open items carry over automatically.
+2. Open **Shift Reports → Open current shift** and log each triaged event.
+3. Update each event's status as it progresses (Contained, Resolved, False Positive). Escalate significant events to incidents.
+4. Before handover, write the summary and handover notes, then **Finalize**. The finalize step warns about open Critical items and missing conclusions.
 
-**Access reviews (quarterly)**
-1. Review **Settings → All Members**: check roles, disabled accounts, accounts flagged "Must change password" and last-login dates.
-2. Cross-check with the `USER_*` and `ROLE_CHANGED` entries in the audit export.
+### Monthly or quarterly evidence pack
 
-## 6. Known limitations & hardening before production
+1. **Shift Reports:** filter by period and *Finalized*. Select all and export a ZIP in PDF and JSON. The ZIP manifest hashes the files.
+2. **Executive Review:** choose a custom range and export the brief. Alternatively, use the archived scheduled brief from the **Report Center**, which can be verified against its stored hash.
+3. **Audit Trail:** filter by the same period, select *Verify integrity*, then export CSV and JSON.
+4. Confirm `audit_integrity_alerts` is empty and that the WORM bucket holds the period's log objects.
 
-The platform enforces RBAC in the client and uses its own credential store.
-Firestore rules enforce data integrity (sealed reports, append-only audit), but
-they do **not** know an analyst's role, because every browser shares an anonymous
-Firebase transport identity. Close these gaps for regulated or production use:
+### Access review (quarterly)
 
-1. **Move authentication server-side.** Use Firebase Authentication (email/password or SSO/OIDC) and set the role as a custom claim from a Cloud Function. Then change the rules to check `request.auth.token.role == 'admin'` for user management, roster writes and report deletion, and stop clients from reading `passwordHash`.
-2. **Seal reports server-side.** Compute the finalization hash and timestamp in a Cloud Function, so a modified client cannot seal tampered content.
-3. **Export the audit trail to WORM storage**, for example a Cloud Logging sink or a BigQuery table with retention locks, so retention does not depend on Firestore.
-4. **Enable MFA** for administrator accounts in the identity provider.
-5. **Set a Content-Security-Policy** in hosting headers once the final domains are known (`firebase.json` already sets HSTS, `nosniff`, frame denial and referrer policy).
-6. **Local mode is for evaluation only.** Data stays in one browser profile, and the local audit cache keeps the latest 5,000 entries.
+1. In **Settings → All Members**, review roles, disabled accounts, *Must change password* flags, MFA status and last sign-in.
+2. Reconcile against `USER_*`, `ROLE_CHANGED` and `MFA_*` entries in the audit export.
+
+## 6. Test evidence
+
+| Suite | Scope | Command |
+|---|---|---|
+| Unit | SLA maths, carry-over de-duplication, report and audit hashing, PBKDF2, password policy, TOTP RFC 4226 vectors and replay protection, safe Markdown (XSS), IP/port validation, scheduling, swap validation | `npm test` |
+| Security rules | Directory access, role escalation, admin MFA gate, draft-only edits, server-only sealing, immutability, handover and swap state machines, append-only audit, archive and mail protection | `npm run test:emulators` |
+| Cloud Functions | Provisioning, claims, MFA gate, password lifecycle, failed-login recording, server sealing, audit sink, scheduled reports (no duplicate runs) | `npm run test:emulators` |
+| End-to-end | Full workflow with real TOTP: MFA enrolment and challenge, forced rotation, provisioning, roster, carry-over, handover, escalation, SLA, sealing, exports, swaps, Report Center, audit verification, Chinese UI, phone layout | `npm run test:e2e` |
+
+## 7. Residual risks and limitations
+
+1. **Not yet validated against a live Firebase project:** Firebase TOTP MFA in production, e-mail delivery and the WORM log sink. The emulator cannot complete TOTP, so admin MFA is tested at the rules and functions level by asserting the second-factor claim. Run the checklist in `docs/DEPLOYMENT.md` §7 after the first deployment.
+2. **Fine-grained analyst permissions** (for example disabling *Log shift events* for a role) are applied in the UI and in the `finalizeShiftReport` function. The Firestore rules enforce role membership and state machines, not every individual permission toggle.
+3. **Username lookup:** `login_index` allows single-document reads before authentication, so a caller can test whether a username exists. Use non-obvious usernames, or switch sign-in to e-mail only, if username enumeration is in scope.
+4. **Audit reading:** only administrators who have passed MFA can read `audit_logs`. Analyst dashboards therefore show no audit-derived statistics in cloud mode.
+5. **Legacy modules** (assets, incidents, tasks, messaging, guidelines, requests) still use browser storage and optional Supabase. Integrate them with Firestore and the rules model before using them as audit evidence.
+6. **Scheduling** uses the browser's local hour when the schedule is saved, then advances in fixed periods. Daylight-saving transitions may shift run times by one hour.
+7. **Content-Security-Policy:** add a CSP header in `firebase.json` once the final domains are known. HSTS, `nosniff`, frame denial and referrer policy are already set.

@@ -10,7 +10,10 @@
     "lint": "tsc --noEmit && npm --prefix functions run typecheck",
     "test": "vitest run",
     "test:emulators": "node scripts/emulator-env.mjs && npm --prefix functions run build && firebase emulators:exec --only auth,firestore,functions --project demo-geyes \"vitest run --config vitest.emulator.config.ts\"",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "i18n:check": "node scripts/i18n-keys.mjs --check",
+    "test:all": "npm run lint && npm test && npm run i18n:check && npm run test:emulators && npm run test:e2e",
+    "deploy": "npm run build && firebase deploy --only hosting,firestore,functions"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
